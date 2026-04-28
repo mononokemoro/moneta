@@ -1,0 +1,228 @@
+/* 보고서 화면 */
+
+.cb-report-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 184px;
+  gap: 8px;
+  height: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.cb-shell--report {
+  /* 1024 캔버스: 본문 + 좁은 우측 */
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 152px);
+}
+
+.cb-report {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-1);
+  border: 1px solid var(--toss-gray-200);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cb-report__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cb-report__mainTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cb-report__mainTabs button {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--toss-gray-200);
+  background: var(--toss-gray-50);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cb-report__mainTabs button.is-active {
+  border-color: var(--toss-blue);
+  background: var(--toss-blue-soft);
+  color: var(--toss-blue);
+}
+
+.cb-report__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cb-report__subbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--toss-gray-100);
+}
+
+.cb-report__periodTabs {
+  display: flex;
+  gap: 4px;
+}
+
+.cb-report__periodTabs button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--toss-gray-200);
+  background: var(--surface-1);
+  font-size: 12px;
+}
+
+.cb-report__periodTabs button.is-active {
+  background: var(--toss-gray-900);
+  color: #fff;
+  border-color: var(--toss-gray-900);
+}
+
+.cb-report__half {
+  display: flex;
+  gap: 6px;
+}
+
+.cb-report__half button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--toss-gray-200);
+  background: var(--surface-1);
+}
+
+.cb-report__half button.is-active {
+  border-color: var(--toss-blue);
+  color: var(--toss-blue);
+  font-weight: 700;
+}
+
+.cb-report__years {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.cb-report__years button {
+  min-width: 56px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--toss-gray-200);
+  background: var(--toss-gray-50);
+  font-weight: 700;
+}
+
+.cb-report__years button.is-active {
+  background: var(--toss-blue);
+  border-color: var(--toss-blue);
+  color: #fff;
+}
+
+.cb-report__titleRow {
+  margin-bottom: 12px;
+}
+
+.cb-report__h1 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.cb-report__h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--toss-gray-700);
+}
+
+.cb-report__tablewrap {
+  overflow: auto;
+  margin-bottom: 10px;
+}
+
+.cb-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  min-width: 560px;
+}
+
+.cb-report-table thead th {
+  background: var(--toss-gray-50);
+  padding: 6px 4px;
+  border: 1px solid var(--toss-gray-200);
+  text-align: center;
+  font-weight: 700;
+}
+
+.cb-report-table__sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--toss-gray-500);
+  margin-top: 4px;
+}
+
+.cb-report-table__corner {
+  text-align: left !important;
+  min-width: 72px;
+}
+
+.cb-report-table tbody th {
+  background: var(--toss-gray-50);
+  padding: 6px 8px;
+  border: 1px solid var(--toss-gray-200);
+  text-align: left;
+  font-weight: 700;
+}
+
+.cb-report-table tbody td {
+  padding: 5px 4px;
+  border: 1px solid var(--toss-gray-200);
+}
+
+.cb-report-table__sum,
+.cb-report-table__sumcell {
+  background: rgba(49, 130, 246, 0.06);
+  font-weight: 700;
+}
+
+.cb-report__footnotes {
+  font-size: 10px;
+  color: var(--toss-gray-500);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+
+.cb-report__chart {
+  margin-top: 8px;
+}
+
+.cb-report__chartbox {
+  background: var(--toss-gray-50);
+  border: 1px solid var(--toss-gray-200);
+  border-radius: var(--radius-md);
+  padding: 12px 8px 4px;
+}
+
+@media print {
+  .cb-report__actions,
+  .cb-report__mainTabs button:not(.is-active),
+  .cb-report__years,
+  .cb-report__half,
+  .cb-report__periodTabs {
+    display: none !important;
+  }
+}

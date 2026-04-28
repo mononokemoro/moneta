@@ -1,0 +1,28 @@
+# H2 파일 DB: CWD와 무관하게 고정 (모노레포 루트에서 실행해도 backend/data 와 중복 생성 안 함)
+# 다른 경로: SPRING_DATASOURCE_URL 또는 PININICONG_H2_FILE 로 재정의
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: pininicong-cashbook
+  datasource:
+    url: jdbc:h2:file:${PININICONG_H2_FILE:${user.home}/.pininicong-cashbook/db};DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+logging:
+  level:
+    com.pininicong: INFO

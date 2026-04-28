@@ -1,0 +1,28 @@
+{
+  // --- pininicong-cashbook: JDK 21 (로컬 경로) ---
+  "java.import.gradle.enabled": true,
+  "java.import.gradle.java.home": "C:\\vPlus\\config\\jdk-21",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-21",
+      "path": "C:\\vPlus\\config\\jdk-21",
+      "default": true
+    }
+  ],
+
+  // Maven 은 이 워크스페이스에서 비활성(backend 는 Gradle 전용). 다른 폴더 열면 필요 시 켜기.
+  "java.import.maven.enabled": false,
+
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.project.importOnFirstTimeStartup": "automatic",
+  "java.eclipse.downloadSources": true,
+
+  // 레거시 Maven 태스크 쓸 때 터미널 JAVA_HOME (동일 JDK 권장)
+  "maven.terminal.useJavaHome": true,
+  "maven.terminal.customEnv": [
+    {
+      "environmentVariable": "JAVA_HOME",
+      "value": "C:\\vPlus\\config\\jdk-21"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* 토스 느낌 토큰 (브랜드 컬러는 공개 가이드와 유사한 블루·그레이 스케일) */
+:root {
+  /* 기본 앱 캔버스 (가계부·보고서 공통) */
+  --cb-app-width: 100vw;
+  --cb-app-height: 100vh;
+  --surface-0: #121417;
+  --surface-1: #1a1d21;
+  --surface-2: #242930;
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --toss-blue: #7e8897;
+  --toss-blue-hover: #6c7583;
+  --toss-blue-soft: rgba(149, 158, 172, 0.24);
+  --toss-gray-50: #1f2329;
+  --toss-gray-100: #2a2f37;
+  --toss-gray-200: #363d47;
+  --toss-gray-300: #4a5360;
+  --toss-gray-500: #9ea7b3;
+  --toss-gray-700: #ccd2dc;
+  --toss-gray-900: #edf0f6;
+  --toss-red: #ff6b7a;
+  --toss-red-soft: #3c1f28;
+  --toss-green: #44c78b;
+  --toss-green-soft: #193228;
+  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --transition-fast: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--toss-gray-900);
+  background: var(--surface-0);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: var(--cb-app-width);
+  height: var(--cb-app-height);
+  flex-shrink: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+}
+
+button:active:not(:disabled) {
+  opacity: 0.92;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--toss-blue);
+  outline-offset: 2px;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--toss-gray-900);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border: 1px solid var(--toss-gray-200);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: var(--surface-1);
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+textarea:hover,
+select:hover {
+  border-color: var(--toss-gray-300);
+  background: var(--surface-2);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--toss-blue);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px var(--toss-blue-soft);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 3rem;
+}

@@ -1,0 +1,17 @@
+# pininicong-cashbook (Gradle + Spring + React)
+/target/
+backend/target/
+backend/build/
+backend/.gradle/
+backend/data/
+# H2 (예전 설정: CWD=모노레포 루트일 때 생성되던 경로)
+/data/
+*.iml
+.idea/
+
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
