@@ -11,6 +11,8 @@ const NO_STORE_INIT: RequestInit = {
 };
 const NO_STORE_HEADERS = NO_STORE_INIT.headers as Record<string, string>;
 
+export type ExpenseScope = "NORMAL" | "COMMON";
+
 export interface TransactionRow {
   id: number;
   title: string;
@@ -18,6 +20,7 @@ export interface TransactionRow {
   category: string;
   cardName: string;
   remarks: string;
+  expenseScope?: ExpenseScope;
 }
 
 export interface SavingsRow {
@@ -87,6 +90,7 @@ export interface CreateTxBody {
   remarks?: string;
   accumulatedAmount?: number;
   book?: LedgerBook;
+  expenseScope?: ExpenseScope;
 }
 
 export async function createTransaction(body: CreateTxBody): Promise<void> {
@@ -111,6 +115,7 @@ export interface UpdateTxBody {
   cardName?: string;
   remarks?: string;
   accumulatedAmount?: number;
+  expenseScope?: ExpenseScope;
 }
 
 export async function updateTransaction(id: number, body: UpdateTxBody): Promise<void> {

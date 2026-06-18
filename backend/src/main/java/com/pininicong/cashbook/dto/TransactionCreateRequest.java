@@ -1,5 +1,6 @@
 package com.pininicong.cashbook.dto;
 
+import com.pininicong.cashbook.domain.ExpenseScope;
 import com.pininicong.cashbook.domain.LedgerBook;
 import com.pininicong.cashbook.domain.TxType;
 import jakarta.validation.constraints.NotNull;
@@ -15,4 +16,5 @@ public record TransactionCreateRequest(
         String cardName,
         String remarks,
         BigDecimal accumulatedAmount,
-        LedgerBook book) {}
+        LedgerBook book,
+        ExpenseScope expenseScope) {}

@@ -473,6 +473,15 @@
   width: 24px;
 }
 
+.cb-col-scope {
+  width: 4.5rem;
+}
+
+.cb-cell--scope {
+  padding: 2px 4px;
+  min-width: 4rem;
+}
+
 .cb-num {
   text-align: right !important;
   font-variant-numeric: tabular-nums;

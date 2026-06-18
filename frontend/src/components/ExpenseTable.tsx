@@ -3,6 +3,7 @@ import {
   createTransaction,
   deleteTransaction,
   updateTransaction,
+  type ExpenseScope,
   type TransactionRow,
   type TxType,
 } from "../api/cashbook";
@@ -20,6 +21,7 @@ type RowDraft = {
   category: string;
   cardName: string;
   remarks: string;
+  expenseScope: ExpenseScope;
 };
 
 type Props = {
@@ -42,6 +44,7 @@ function emptyDraft(): RowDraft {
     category: "",
     cardName: "",
     remarks: "",
+    expenseScope: "NORMAL",
   };
 }
 
@@ -54,6 +57,7 @@ function fromRow(r: TransactionRow): RowDraft {
     category: r.category,
     cardName: r.cardName,
     remarks: r.remarks,
+    expenseScope: r.expenseScope === "COMMON" ? "COMMON" : "NORMAL",
   };
 }
 
@@ -68,12 +72,14 @@ function hasContent(d: RowDraft, withCard: boolean): boolean {
 }
 
 function rowChanged(d: RowDraft, r: TransactionRow): boolean {
+  const scope = r.expenseScope === "COMMON" ? "COMMON" : "NORMAL";
   return (
     d.title !== r.title ||
     parseAmount(d.amount) !== r.amount ||
     d.category !== r.category ||
     d.cardName !== r.cardName ||
-    d.remarks !== r.remarks
+    d.remarks !== r.remarks ||
+    d.expenseScope !== scope
   );
 }
 
@@ -92,6 +98,7 @@ export function ExpenseTable({
   const [busy, setBusy] = useState(false);
   const newRowRef = useRef<HTMLInputElement | null>(null);
   const withCard = variant === "expense";
+  const withScope = withCard;
   const catListId = `cat-${variant}`;
 
   useEffect(() => {
@@ -106,6 +113,13 @@ export function ExpenseTable({
 
   function patch(key: string, patch: Partial<RowDraft>) {
     setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+  }
+
+  async function handleScopeChange(d: RowDraft, expenseScope: ExpenseScope) {
+    patch(d.key, { expenseScope });
+    if (d.id) {
+      await commitRow({ ...d, expenseScope });
+    }
   }
 
   async function commitRow(d: RowDraft) {
@@ -125,6 +139,7 @@ export function ExpenseTable({
           cardName: withCard ? d.cardName : "",
           remarks: d.remarks,
           book,
+          expenseScope: withScope ? d.expenseScope : undefined,
         });
         await onReload();
       } finally {
@@ -142,6 +157,7 @@ export function ExpenseTable({
         category: d.category,
         cardName: withCard ? d.cardName : "",
         remarks: d.remarks,
+        expenseScope: withScope ? d.expenseScope : undefined,
       });
       await onReload();
     } finally {
@@ -205,6 +221,7 @@ export function ExpenseTable({
           <thead>
             <tr>
               <th className="cb-col-check" />
+              {withScope && <th className="cb-col-scope">구분</th>}
               <th>항목</th>
               <th className="cb-num">금액</th>
               <th>분류</th>
@@ -228,6 +245,21 @@ export function ExpenseTable({
                     />
                   ) : null}
                 </td>
+                {withScope && (
+                  <td>
+                    <select
+                      className="cb-cell cb-cell--scope"
+                      value={d.expenseScope}
+                      onChange={(e) =>
+                        void handleScopeChange(d, e.target.value as ExpenseScope)
+                      }
+                      disabled={busy}
+                    >
+                      <option value="NORMAL">—</option>
+                      <option value="COMMON">공통</option>
+                    </select>
+                  </td>
+                )}
                 <td>
                   <input
                     ref={idx === drafts.length - 1 ? newRowRef : undefined}
@@ -277,7 +309,7 @@ export function ExpenseTable({
           </tbody>
           <tfoot>
             <tr className="cb-tfoot">
-              <td colSpan={withCard ? 6 : 5}>
+              <td colSpan={(withCard ? 6 : 5) + (withScope ? 1 : 0)}>
                 <span className="cb-meta">총 {rows.length}건</span>
                 <span className="cb-meta cb-meta--sum">{formatMoney(sum)}</span>
                 {variant === "expense" && (

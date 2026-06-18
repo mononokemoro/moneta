@@ -54,6 +54,14 @@ public class CbTransaction {
     @Column(nullable = false)
     private Integer sortOrder = 0;
 
+    /** 가계 지출: 공통 항목이면 개인 장부에 연동 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private ExpenseScope expenseScope = ExpenseScope.NORMAL;
+
+    /** 연동된 다른 장부 거래 ID */
+    private Long linkedTxId;
+
     public Long getId() {
         return id;
     }
@@ -136,5 +144,21 @@ public class CbTransaction {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public ExpenseScope getExpenseScope() {
+        return expenseScope;
+    }
+
+    public void setExpenseScope(ExpenseScope expenseScope) {
+        this.expenseScope = expenseScope != null ? expenseScope : ExpenseScope.NORMAL;
+    }
+
+    public Long getLinkedTxId() {
+        return linkedTxId;
+    }
+
+    public void setLinkedTxId(Long linkedTxId) {
+        this.linkedTxId = linkedTxId;
     }
 }
