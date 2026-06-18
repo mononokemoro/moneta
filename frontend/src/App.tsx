@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import "./cashbook.css";
 import "./report.css";
+import "./settings.css";
 import { fetchDay, type DayView } from "./api/cashbook";
 import { loadLedgerBook, saveLedgerBook, type LedgerBook } from "./api/ledgerBook";
 import { LeftSidebar } from "./components/LeftSidebar";
-import { LeftNavRail } from "./components/LeftNavRail";
 import { MainBoard } from "./components/MainBoard";
 import { ReportView } from "./components/ReportView";
+import { SettingsView } from "./components/SettingsView";
 import { RightSidebar, type SidebarView } from "./components/RightSidebar";
 import { toIsoDate } from "./util/dateUtil";
 
@@ -19,6 +20,7 @@ export default function App() {
   const [scheduleNote, setScheduleNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [keywordRefresh, setKeywordRefresh] = useState(0);
 
   const handleBookChange = useCallback((next: LedgerBook) => {
     setBook(next);
@@ -51,11 +53,16 @@ export default function App() {
     };
   }, [date, book, view]);
 
+  useEffect(() => {
+    if (view === "cashbook") {
+      setKeywordRefresh((n) => n + 1);
+    }
+  }, [view]);
+
   return (
-    <div className={`cb-shell${view === "report" ? " cb-shell--report" : ""}`}>
+    <div className={`cb-shell${view !== "cashbook" ? " cb-shell--report" : ""}`}>
       {view === "cashbook" && (
         <div className="cb-cashbook-layout">
-          <LeftNavRail />
           <LeftSidebar
             book={book}
             onBookChange={handleBookChange}
@@ -76,6 +83,7 @@ export default function App() {
             onScheduleChange={setScheduleNote}
             onDateChange={setDate}
             onReload={reload}
+            keywordRefresh={keywordRefresh}
           />
           <RightSidebar view={view} onViewChange={setView} day={day} />
         </div>
@@ -83,6 +91,12 @@ export default function App() {
       {view === "report" && (
         <div className="cb-report-layout">
           <ReportView book={book} onBookChange={handleBookChange} />
+          <RightSidebar view={view} onViewChange={setView} day={day} />
+        </div>
+      )}
+      {view === "settings" && (
+        <div className="cb-settings-layout">
+          <SettingsView book={book} onBookChange={handleBookChange} />
           <RightSidebar view={view} onViewChange={setView} day={day} />
         </div>
       )}

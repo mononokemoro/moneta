@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CategoryKeyword } from "../api/categoryKeywords";
 import {
   createTransaction,
   deleteTransaction,
@@ -11,6 +12,7 @@ import type { LedgerBook } from "../api/ledgerBook";
 import { formatMoney } from "../formatMoney";
 import { amountToInput, parseAmount } from "../util/parseAmount";
 import { buildTableDrafts } from "../util/tableDrafts";
+import { matchCategoryByKeyword } from "../util/matchCategoryKeyword";
 import { CategoryDatalist } from "./CategoryDatalist";
 
 type RowDraft = {
@@ -34,6 +36,7 @@ type Props = {
   onToggle: (id: number, checked: boolean) => void;
   onReload: () => Promise<void>;
   categoryOptions?: string[];
+  categoryKeywords?: CategoryKeyword[];
 };
 
 function emptyDraft(): RowDraft {
@@ -93,6 +96,7 @@ export function ExpenseTable({
   onToggle,
   onReload,
   categoryOptions = [],
+  categoryKeywords = [],
 }: Props) {
   const [drafts, setDrafts] = useState<RowDraft[]>([]);
   const [busy, setBusy] = useState(false);
@@ -111,12 +115,20 @@ export function ExpenseTable({
     .reduce((a, r) => a + (Number(r.amount) || 0), 0);
   const cardSum = sum - cashSum;
 
-  function patch(key: string, patch: Partial<RowDraft>) {
-    setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+  function patchRow(key: string, updates: Partial<RowDraft>) {
+    setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...updates } : d)));
   }
 
-  async function handleScopeChange(d: RowDraft, expenseScope: ExpenseScope) {
-    patch(d.key, { expenseScope });
+  function handleTitleChange(d: RowDraft, title: string) {
+    const updates: Partial<RowDraft> = { title };
+    const matched = matchCategoryByKeyword(title, categoryKeywords, txType);
+    if (matched) updates.category = matched;
+    patchRow(d.key, updates);
+  }
+
+  async function handleScopeChange(d: RowDraft, checked: boolean) {
+    const expenseScope: ExpenseScope = checked ? "COMMON" : "NORMAL";
+    patchRow(d.key, { expenseScope });
     if (d.id) {
       await commitRow({ ...d, expenseScope });
     }
@@ -221,7 +233,7 @@ export function ExpenseTable({
           <thead>
             <tr>
               <th className="cb-col-check" />
-              {withScope && <th className="cb-col-scope">구분</th>}
+              {withScope && <th className="cb-col-scope">공통</th>}
               <th>항목</th>
               <th className="cb-num">금액</th>
               <th>분류</th>
@@ -246,18 +258,16 @@ export function ExpenseTable({
                   ) : null}
                 </td>
                 {withScope && (
-                  <td>
-                    <select
-                      className="cb-cell cb-cell--scope"
-                      value={d.expenseScope}
-                      onChange={(e) =>
-                        void handleScopeChange(d, e.target.value as ExpenseScope)
-                      }
+                  <td className="cb-col-scope">
+                    <input
+                      type="checkbox"
+                      className="cb-scope-check"
+                      checked={d.expenseScope === "COMMON"}
+                      onChange={(e) => void handleScopeChange(d, e.target.checked)}
                       disabled={busy}
-                    >
-                      <option value="NORMAL">—</option>
-                      <option value="COMMON">공통</option>
-                    </select>
+                      aria-label="공통 항목"
+                      title="공통 항목 (다른 장부에도 등록)"
+                    />
                   </td>
                 )}
                 <td>
@@ -265,7 +275,7 @@ export function ExpenseTable({
                     ref={idx === drafts.length - 1 ? newRowRef : undefined}
                     className="cb-cell"
                     value={d.title}
-                    onChange={(e) => patch(d.key, { title: e.target.value })}
+                    onChange={(e) => handleTitleChange(d, e.target.value)}
                     disabled={busy}
                   />
                 </td>
@@ -273,7 +283,7 @@ export function ExpenseTable({
                   <input
                     className="cb-cell cb-num"
                     value={d.amount}
-                    onChange={(e) => patch(d.key, { amount: e.target.value })}
+                    onChange={(e) => patchRow(d.key, { amount: e.target.value })}
                     disabled={busy}
                   />
                 </td>
@@ -282,7 +292,7 @@ export function ExpenseTable({
                     className="cb-cell"
                     list={categoryOptions.length > 0 ? catListId : undefined}
                     value={d.category}
-                    onChange={(e) => patch(d.key, { category: e.target.value })}
+                    onChange={(e) => patchRow(d.key, { category: e.target.value })}
                     disabled={busy}
                   />
                 </td>
@@ -291,7 +301,7 @@ export function ExpenseTable({
                     <input
                       className="cb-cell"
                       value={d.cardName}
-                      onChange={(e) => patch(d.key, { cardName: e.target.value })}
+                      onChange={(e) => patchRow(d.key, { cardName: e.target.value })}
                       disabled={busy}
                     />
                   </td>
@@ -300,7 +310,7 @@ export function ExpenseTable({
                   <input
                     className="cb-cell"
                     value={d.remarks}
-                    onChange={(e) => patch(d.key, { remarks: e.target.value })}
+                    onChange={(e) => patchRow(d.key, { remarks: e.target.value })}
                     disabled={busy}
                   />
                 </td>

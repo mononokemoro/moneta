@@ -1,0 +1,73 @@
+/* 설정 화면 */
+
+.cb-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 184px;
+  gap: 8px;
+  height: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.cb-settings {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--toss-gray-200);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.cb-settings__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cb-settings__top .cb-bookSwitch {
+  flex: 0 0 100%;
+  margin-bottom: 0;
+}
+
+.cb-settings__title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #e8eef8;
+}
+
+.cb-settings__section {
+  margin-bottom: 20px;
+}
+
+.cb-settings__sectionTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #d4e3f9;
+}
+
+.cb-settings__hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #9aa8bc;
+  line-height: 1.45;
+}
+
+.cb-settings__tablewrap {
+  overflow: auto;
+}
+
+.cb-settings__table {
+  min-width: 360px;
+}
+
+.cb-settings__del {
+  padding: 4px 8px;
+  font-size: 11px;
+}

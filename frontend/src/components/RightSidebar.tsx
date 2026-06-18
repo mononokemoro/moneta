@@ -1,7 +1,7 @@
 import type { DayView } from "../api/cashbook";
 import { formatMoney } from "../formatMoney";
 
-export type SidebarView = "cashbook" | "report";
+export type SidebarView = "cashbook" | "report" | "settings";
 
 type Props = {
   view: SidebarView;
@@ -22,6 +22,19 @@ export function RightSidebar({ view, onViewChange, day }: Props) {
 
   return (
     <aside className="cb-side cb-side--right">
+      <button
+        type="button"
+        className={`cb-side__settings${view === "settings" ? " is-active" : ""}`}
+        aria-label="설정"
+        aria-current={view === "settings" ? "page" : undefined}
+        onClick={() => onViewChange("settings")}
+      >
+        <span className="cb-side__settingsIcon" aria-hidden>
+          ⚙
+        </span>
+        <span>설정</span>
+      </button>
+
       <nav className="cb-tabs" aria-label="보조 메뉴">
         <button
           type="button"

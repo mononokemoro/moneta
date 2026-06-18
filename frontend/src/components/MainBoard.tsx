@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { DayView } from "../api/cashbook";
 import { deleteTransaction, updateDailySheet } from "../api/cashbook";
+import { fetchCategoryKeywords, type CategoryKeyword } from "../api/categoryKeywords";
 import type { LedgerBook } from "../api/ledgerBook";
 import { addDays, formatDayTitle, toIsoDate } from "../util/dateUtil";
 import { ExpenseTable } from "./ExpenseTable";
@@ -17,6 +18,7 @@ type Props = {
   onScheduleChange: (v: string) => void;
   onDateChange: (iso: string) => void;
   onReload: () => Promise<void>;
+  keywordRefresh?: number;
 };
 
 export function MainBoard({
@@ -29,6 +31,7 @@ export function MainBoard({
   onScheduleChange,
   onDateChange,
   onReload,
+  keywordRefresh = 0,
 }: Props) {
   const [selExp, setSelExp] = useState<Set<number>>(new Set());
   const [selInc, setSelInc] = useState<Set<number>>(new Set());
@@ -37,9 +40,24 @@ export function MainBoard({
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(false);
   const categories = useCategories(book);
+  const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
   const expenseCats = categories?.expense.map((c) => c.name) ?? [];
   const incomeCats = categories?.income.map((c) => c.name) ?? [];
   const savingsTitles = categories?.savings.map((c) => c.name) ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCategoryKeywords(book)
+      .then((rows) => {
+        if (!cancelled) setCategoryKeywords(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryKeywords([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [book, keywordRefresh]);
 
   useEffect(() => {
     setSelExp(new Set());
@@ -131,6 +149,7 @@ export function MainBoard({
             onToggle={(id, c) => toggle(setSelExp, id, c)}
             onReload={onReload}
             categoryOptions={expenseCats}
+            categoryKeywords={categoryKeywords}
           />
           <ExpenseTable
             book={book}
@@ -142,6 +161,7 @@ export function MainBoard({
             onToggle={(id, c) => toggle(setSelInc, id, c)}
             onReload={onReload}
             categoryOptions={incomeCats}
+            categoryKeywords={categoryKeywords}
           />
           <SavingsTable
             book={book}
