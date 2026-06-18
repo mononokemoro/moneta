@@ -1,13 +1,29 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createTransaction,
   deleteTransaction,
+  updateTransaction,
   type TransactionRow,
   type TxType,
 } from "../api/cashbook";
+import type { LedgerBook } from "../api/ledgerBook";
 import { formatMoney } from "../formatMoney";
+import { amountToInput, parseAmount } from "../util/parseAmount";
+import { buildTableDrafts } from "../util/tableDrafts";
+import { CategoryDatalist } from "./CategoryDatalist";
+
+type RowDraft = {
+  key: string;
+  id?: number;
+  title: string;
+  amount: string;
+  category: string;
+  cardName: string;
+  remarks: string;
+};
 
 type Props = {
+  book: LedgerBook;
   txDate: string;
   txType: TxType;
   variant: "expense" | "income";
@@ -15,9 +31,54 @@ type Props = {
   selected: Set<number>;
   onToggle: (id: number, checked: boolean) => void;
   onReload: () => Promise<void>;
+  categoryOptions?: string[];
 };
 
+function emptyDraft(): RowDraft {
+  return {
+    key: `new-${Math.random().toString(36).slice(2)}`,
+    title: "",
+    amount: "",
+    category: "",
+    cardName: "",
+    remarks: "",
+  };
+}
+
+function fromRow(r: TransactionRow): RowDraft {
+  return {
+    key: String(r.id),
+    id: r.id,
+    title: r.title,
+    amount: amountToInput(r.amount),
+    category: r.category,
+    cardName: r.cardName,
+    remarks: r.remarks,
+  };
+}
+
+function hasContent(d: RowDraft, withCard: boolean): boolean {
+  return !!(
+    d.title.trim() ||
+    d.amount.trim() ||
+    d.category.trim() ||
+    d.remarks.trim() ||
+    (withCard && d.cardName.trim())
+  );
+}
+
+function rowChanged(d: RowDraft, r: TransactionRow): boolean {
+  return (
+    d.title !== r.title ||
+    parseAmount(d.amount) !== r.amount ||
+    d.category !== r.category ||
+    d.cardName !== r.cardName ||
+    d.remarks !== r.remarks
+  );
+}
+
 export function ExpenseTable({
+  book,
   txDate,
   txType,
   variant,
@@ -25,37 +86,72 @@ export function ExpenseTable({
   selected,
   onToggle,
   onReload,
+  categoryOptions = [],
 }: Props) {
-  const [draft, setDraft] = useState({
-    title: "",
-    amount: "",
-    category: "",
-    cardName: "",
-    remarks: "",
-  });
+  const [drafts, setDrafts] = useState<RowDraft[]>([]);
   const [busy, setBusy] = useState(false);
-  const addFormRef = useRef<HTMLFormElement | null>(null);
+  const newRowRef = useRef<HTMLInputElement | null>(null);
+  const withCard = variant === "expense";
+  const catListId = `cat-${variant}`;
+
+  useEffect(() => {
+    setDrafts(buildTableDrafts(rows.map(fromRow), emptyDraft));
+  }, [rows, txDate]);
 
   const sum = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const cashSum = rows
+    .filter((r) => !r.cardName?.trim())
+    .reduce((a, r) => a + (Number(r.amount) || 0), 0);
+  const cardSum = sum - cashSum;
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  function patch(key: string, patch: Partial<RowDraft>) {
+    setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+  }
+
+  async function commitRow(d: RowDraft) {
+    if (busy) return;
+    const orig = d.id ? rows.find((r) => r.id === d.id) : undefined;
+
+    if (!d.id) {
+      if (!hasContent(d, withCard)) return;
+      setBusy(true);
+      try {
+        await createTransaction({
+          txDate,
+          txType,
+          title: d.title.trim() || "(미입력)",
+          amount: parseAmount(d.amount),
+          category: d.category,
+          cardName: withCard ? d.cardName : "",
+          remarks: d.remarks,
+          book,
+        });
+        await onReload();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!orig || !rowChanged(d, orig)) return;
     setBusy(true);
     try {
-      await createTransaction({
-        txDate,
-        txType,
-        title: draft.title || "(미입력)",
-        amount: Number(draft.amount.replace(/,/g, "")) || 0,
-        category: draft.category,
-        cardName: variant === "expense" ? draft.cardName : "",
-        remarks: draft.remarks,
+      await updateTransaction(d.id, {
+        title: d.title.trim() || "(미입력)",
+        amount: parseAmount(d.amount),
+        category: d.category,
+        cardName: withCard ? d.cardName : "",
+        remarks: d.remarks,
       });
-      setDraft({ title: "", amount: "", category: "", cardName: "", remarks: "" });
       await onReload();
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleRowBlur(d: RowDraft, e: React.FocusEvent<HTMLTableRowElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    void commitRow(d);
   }
 
   async function handleDeleteSelected() {
@@ -71,16 +167,14 @@ export function ExpenseTable({
     }
   }
 
+  function focusNewRow() {
+    newRowRef.current?.focus();
+  }
+
   const hdrCls =
     variant === "expense" ? "cb-th cb-th--expense" : "cb-th cb-th--income";
-  const title =
-    variant === "expense" ? "지출내역" : "수입내역";
+  const title = variant === "expense" ? "지출내역" : "수입내역";
   const icon = variant === "expense" ? "↓" : "↑";
-
-  function focusAddRow() {
-    const firstInput = addFormRef.current?.querySelector("input");
-    firstInput?.focus();
-  }
 
   return (
     <section className="cb-panel">
@@ -91,7 +185,7 @@ export function ExpenseTable({
             <span>{title}</span>
           </div>
           <div className="cb-panel__headActions">
-            <button type="button" className="cb-panel__headBtn" onClick={focusAddRow}>
+            <button type="button" className="cb-panel__headBtn" onClick={focusNewRow}>
               + 행추가
             </button>
             <button
@@ -106,79 +200,96 @@ export function ExpenseTable({
         </div>
       </div>
       <div className="cb-panel__tablewrap">
-        <table className="cb-table">
+        <CategoryDatalist id={catListId} options={categoryOptions} />
+        <table className="cb-table cb-table--inline">
           <thead>
             <tr>
               <th className="cb-col-check" />
               <th>항목</th>
               <th className="cb-num">금액</th>
               <th>분류</th>
-              {variant === "expense" && <th>카드명</th>}
+              {withCard && <th>카드명</th>}
               <th>비고</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
+            {drafts.map((d, idx) => (
+              <tr
+                key={d.key}
+                className={d.id ? "cb-row--saved" : "cb-row--new"}
+                onBlur={(e) => handleRowBlur(d, e)}
+              >
+                <td>
+                  {d.id ? (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(d.id)}
+                      onChange={(e) => onToggle(d.id!, e.target.checked)}
+                    />
+                  ) : null}
+                </td>
                 <td>
                   <input
-                    type="checkbox"
-                    checked={selected.has(r.id)}
-                    onChange={(e) => onToggle(r.id, e.target.checked)}
+                    ref={idx === drafts.length - 1 ? newRowRef : undefined}
+                    className="cb-cell"
+                    value={d.title}
+                    onChange={(e) => patch(d.key, { title: e.target.value })}
+                    disabled={busy}
                   />
                 </td>
-                <td>{r.title}</td>
-                <td className="cb-num">{formatMoney(r.amount)}</td>
-                <td>{r.category}</td>
-                {variant === "expense" && <td>{r.cardName}</td>}
-                <td>{r.remarks}</td>
+                <td>
+                  <input
+                    className="cb-cell cb-num"
+                    value={d.amount}
+                    onChange={(e) => patch(d.key, { amount: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="cb-cell"
+                    list={categoryOptions.length > 0 ? catListId : undefined}
+                    value={d.category}
+                    onChange={(e) => patch(d.key, { category: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
+                {withCard && (
+                  <td>
+                    <input
+                      className="cb-cell"
+                      value={d.cardName}
+                      onChange={(e) => patch(d.key, { cardName: e.target.value })}
+                      disabled={busy}
+                    />
+                  </td>
+                )}
+                <td>
+                  <input
+                    className="cb-cell"
+                    value={d.remarks}
+                    onChange={(e) => patch(d.key, { remarks: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="cb-tfoot">
-              <td colSpan={variant === "expense" ? 6 : 5}>
-                <span className="cb-meta">{rows.length}건</span>
-                <span className="cb-meta cb-meta--sum">합계 {formatMoney(sum)}원</span>
+              <td colSpan={withCard ? 6 : 5}>
+                <span className="cb-meta">총 {rows.length}건</span>
+                <span className="cb-meta cb-meta--sum">{formatMoney(sum)}</span>
+                {variant === "expense" && (
+                  <span className="cb-meta">
+                    (현금 {formatMoney(cashSum)} + 카드 {formatMoney(cardSum)})
+                  </span>
+                )}
               </td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <form ref={addFormRef} className="cb-addrow" onSubmit={handleAdd}>
-        <span className="cb-addrow__label">행 추가</span>
-        <input
-          placeholder="항목"
-          value={draft.title}
-          onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-        />
-        <input
-          placeholder="금액"
-          className="cb-num"
-          value={draft.amount}
-          onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))}
-        />
-        <input
-          placeholder="분류"
-          value={draft.category}
-          onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-        />
-        {variant === "expense" && (
-          <input
-            placeholder="카드명"
-            value={draft.cardName}
-            onChange={(e) => setDraft((d) => ({ ...d, cardName: e.target.value }))}
-          />
-        )}
-        <input
-          placeholder="비고"
-          value={draft.remarks}
-          onChange={(e) => setDraft((d) => ({ ...d, remarks: e.target.value }))}
-        />
-        <button type="submit" className="cb-btn cb-btn--primary" disabled={busy}>
-          등록
-        </button>
-      </form>
     </section>
   );
 }

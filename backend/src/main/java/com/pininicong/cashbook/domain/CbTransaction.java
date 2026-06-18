@@ -19,6 +19,10 @@ public class CbTransaction {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private LedgerBook book = LedgerBook.PERSONAL;
+
     @Column(nullable = false)
     private LocalDate txDate;
 
@@ -52,6 +56,14 @@ public class CbTransaction {
 
     public Long getId() {
         return id;
+    }
+
+    public LedgerBook getBook() {
+        return book;
+    }
+
+    public void setBook(LedgerBook book) {
+        this.book = book;
     }
 
     public LocalDate getTxDate() {

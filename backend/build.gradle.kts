@@ -39,6 +39,10 @@ tasks.named<Jar>("jar") {
     archiveBaseName.set("pininicong-cashbook")
 }
 
+tasks.bootJar {
+    archiveFileName.set("pininicong-cashbook-${project.version}.jar")
+}
+
 /**
  * `frontend` 빌드 산출물이 있으면 `classpath:/static` 에 포함해 단일 JAR 로 배포 가능.
  * 없으면 그대로두며(API 전용 JAR), 통합은 `cd frontend && npm run build` 후 다시 `bootJar`.

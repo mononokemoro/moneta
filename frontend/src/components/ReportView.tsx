@@ -9,24 +9,60 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fetchMonthlyReport, type MonthlyReport, type ReportPeriod } from "../api/report";
+import { fetchReport, type ReportData } from "../api/report";
+import type { LedgerBook } from "../api/ledgerBook";
 import { formatMoney } from "../formatMoney";
+import { downloadReportCsv } from "../report/exportReportCsv";
+import { ReportCalendar, ReportDetail, ReportMatrix } from "../report/ReportPanels";
+import { BookSwitcher } from "./BookSwitcher";
+import {
+  clampReportYear,
+  defaultSubView,
+  REPORT_CATEGORIES,
+  REPORT_MIN_YEAR,
+  reportMaxYear,
+  yearRange,
+  type ReportCategory,
+  type ReportGranularity,
+  type ReportPeriod,
+} from "../report/reportConfig";
 
-const YEARS = [2024, 2025, 2026, 2027];
+const DETAIL_SUBVIEWS = new Set([
+  "DETAIL",
+  "SAVINGS_DETAIL",
+  "INSURANCE_DETAIL",
+  "BY_PAYMENT_DATE",
+]);
 
-export function ReportView() {
-  const y = new Date().getFullYear();
-  const [year, setYear] = useState(y);
+type Props = {
+  book: LedgerBook;
+  onBookChange: (book: LedgerBook) => void;
+};
+
+export function ReportView({ book, onBookChange }: Props) {
+  const now = new Date().getFullYear();
+  const [year, setYear] = useState(now);
   const [period, setPeriod] = useState<ReportPeriod>("H1");
-  const [data, setData] = useState<MonthlyReport | null>(null);
+  const [category, setCategory] = useState<ReportCategory>("ALL");
+  const [subView, setSubView] = useState(defaultSubView("ALL"));
+  const [granularity, setGranularity] = useState<ReportGranularity>("MONTHLY");
+  const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  const catDef = REPORT_CATEGORIES.find((c) => c.id === category)!;
+  const maxYear = reportMaxYear(now);
+  const years = useMemo(() => yearRange(year, 7, REPORT_MIN_YEAR, maxYear), [year, maxYear]);
+
+  useEffect(() => {
+    setSubView(defaultSubView(category));
+  }, [category]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setErr(null);
-    fetchMonthlyReport(year, period)
+    fetchReport(year, period, category, subView, granularity, book)
       .then((d) => {
         if (!cancelled) setData(d);
       })
@@ -39,47 +75,57 @@ export function ReportView() {
     return () => {
       cancelled = true;
     };
-  }, [year, period]);
+  }, [year, period, category, subView, granularity, book]);
 
   const chartData = useMemo(() => {
-    if (!data?.expenseTrend) return [];
-    return data.expenseTrend.map((p) => ({
+    if (!data?.trend?.length) return [];
+    const label =
+      data.rows.find((r) => r.key === "EXPENSE")?.label ??
+      data.rows[0]?.label ??
+      "금액";
+    return data.trend.map((p) => ({
       name: p.label,
-      지출: p.value,
+      [label]: p.value,
     }));
   }, [data]);
+
+  const chartKey = data?.rows[0]?.label ?? "금액";
+  const showGranularity =
+    catDef.showGranularity &&
+    !DETAIL_SUBVIEWS.has(subView) &&
+    category !== "CALENDAR" &&
+    category !== "BUDGET";
+
+  function shiftYear(delta: number) {
+    setYear((y) => clampReportYear(y + delta, REPORT_MIN_YEAR, maxYear));
+  }
+
+  const canShiftPrev = year > REPORT_MIN_YEAR;
+  const canShiftNext = year < maxYear;
 
   return (
     <main className="cb-report">
       <header className="cb-report__top">
+        <BookSwitcher book={book} onChange={onBookChange} />
         <nav className="cb-report__mainTabs" aria-label="보고서 구분">
-          <button type="button" className="is-active">
-            전체
-          </button>
-          <button type="button" disabled title="추후">
-            수입
-          </button>
-          <button type="button" disabled title="추후">
-            저축/보험
-          </button>
-          <button type="button" disabled title="추후">
-            대출
-          </button>
-          <button type="button" disabled title="추후">
-            지출
-          </button>
-          <button type="button" disabled title="추후">
-            카드
-          </button>
-          <button type="button" disabled title="추후">
-            예산/실적
-          </button>
-          <button type="button" disabled title="추후">
-            달력보기
-          </button>
+          {REPORT_CATEGORIES.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={category === c.id ? "is-active" : ""}
+              onClick={() => setCategory(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
         </nav>
         <div className="cb-report__actions">
-          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
+          <button
+            type="button"
+            className="cb-btn cb-btn--ghost"
+            disabled={!data}
+            onClick={() => data && downloadReportCsv(data)}
+          >
             엑셀저장
           </button>
           <button type="button" className="cb-btn cb-btn--ghost" onClick={() => window.print()}>
@@ -88,45 +134,73 @@ export function ReportView() {
         </div>
       </header>
 
+      <nav className="cb-report__subTabs" aria-label="보고서 하위 메뉴">
+        {catDef.subViews.map((sv) => (
+          <button
+            key={sv.id}
+            type="button"
+            className={subView === sv.id ? "is-active" : ""}
+            onClick={() => setSubView(sv.id)}
+          >
+            {sv.label}
+          </button>
+        ))}
+      </nav>
+
       <div className="cb-report__subbar">
-        <div className="cb-report__periodTabs">
-          <button type="button" className="is-active">
-            월간
-          </button>
-          <button type="button" disabled title="추후">
-            주간
-          </button>
-          <button type="button" disabled title="추후">
-            일간
-          </button>
-        </div>
+        {showGranularity ? (
+          <div className="cb-report__periodTabs">
+            {(
+              [
+                ["MONTHLY", "월간"],
+                ["WEEKLY", "주간"],
+                ["DAILY", "일간"],
+              ] as const
+            ).map(([g, label]) => (
+              <button
+                key={g}
+                type="button"
+                className={granularity === g ? "is-active" : ""}
+                onClick={() => setGranularity(g)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div />
+        )}
         <div className="cb-report__half">
-          <button
-            type="button"
-            className={period === "H1" ? "is-active" : ""}
-            onClick={() => setPeriod("H1")}
-          >
-            상반기
-          </button>
-          <button
-            type="button"
-            className={period === "H2" ? "is-active" : ""}
-            onClick={() => setPeriod("H2")}
-          >
-            하반기
-          </button>
-          <button
-            type="button"
-            className={period === "FY" ? "is-active" : ""}
-            onClick={() => setPeriod("FY")}
-          >
-            전체
-          </button>
+          {(
+            [
+              ["H1", "상반기"],
+              ["H2", "하반기"],
+              ["FY", "전체"],
+            ] as const
+          ).map(([p, label]) => (
+            <button
+              key={p}
+              type="button"
+              className={period === p ? "is-active" : ""}
+              onClick={() => setPeriod(p)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="cb-report__years">
-        {YEARS.map((yy) => (
+        <button
+          type="button"
+          className="cb-report__yearNav"
+          disabled={!canShiftPrev}
+          onClick={() => shiftYear(-1)}
+          aria-label="이전 연도"
+        >
+          ‹
+        </button>
+        {years.map((yy) => (
           <button
             key={yy}
             type="button"
@@ -136,6 +210,15 @@ export function ReportView() {
             {yy}
           </button>
         ))}
+        <button
+          type="button"
+          className="cb-report__yearNav"
+          disabled={!canShiftNext}
+          onClick={() => shiftYear(1)}
+          aria-label="다음 연도"
+        >
+          ›
+        </button>
       </div>
 
       {loading && <p className="cb-muted">불러오는 중…</p>}
@@ -144,76 +227,55 @@ export function ReportView() {
       {data && !loading && (
         <>
           <div className="cb-report__titleRow">
-            <h1 className="cb-report__h1">
-              월간 보고서 · {data.year}년 · {data.periodLabel}
-            </h1>
+            <h1 className="cb-report__h1">{data.title}</h1>
           </div>
 
-          <div className="cb-report__tablewrap">
-            <table className="cb-report-table">
-              <thead>
-                <tr>
-                  <th className="cb-report-table__corner">구분</th>
-                  {data.columns.map((c) => (
-                    <th key={c.yearMonth}>
-                      <div>{c.monthLabel}</div>
-                      <div className="cb-report-table__sub">{c.rangeLabel}</div>
-                    </th>
-                  ))}
-                  <th className="cb-report-table__sum">{data.periodLabel}합계</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.rows.map((row) => (
-                  <tr key={row.key}>
-                    <th scope="row">{row.label}</th>
-                    {row.values.map((v, i) => (
-                      <td key={i} className="cb-num">
-                        {formatMoney(v)}
-                      </td>
-                    ))}
-                    <td className="cb-num cb-report-table__sumcell">{formatMoney(row.periodTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {data.viewMode === "matrix" && <ReportMatrix data={data} />}
+          {data.viewMode === "detail" && <ReportDetail data={data} />}
+          {data.viewMode === "calendar" && <ReportCalendar data={data} />}
 
-          <p className="cb-report__footnotes">
-            * 저축/보험은 「저축」 거래 중 분류에 「보험」이 포함된 것만 보험 행으로 집계합니다.
-            <br />
-            * 대출·지출은 「지출」 거래 중 분류에 「대출」 포함 여부로 나눕니다.
-          </p>
+          {data.footnotes.length > 0 && (
+            <p className="cb-report__footnotes">
+              {data.footnotes.map((note) => (
+                <span key={note}>
+                  * {note}
+                  <br />
+                </span>
+              ))}
+            </p>
+          )}
 
-          <section className="cb-report__chart">
-            <h2 className="cb-report__h2">월별 지출 추이</h2>
-            <div className="cb-report__chartbox">
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 6, right: 12, left: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e8eb" />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                  <YAxis
-                    tickFormatter={(v) => formatMoney(Number(v))}
-                    width={56}
-                    tick={{ fontSize: 10 }}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [formatMoney(value), "지출"]}
-                    labelFormatter={(l) => String(l)}
-                  />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="지출"
-                    stroke="#30b06e"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+          {data.viewMode === "matrix" && chartData.length > 0 && (
+            <section className="cb-report__chart">
+              <h2 className="cb-report__h2">추이</h2>
+              <div className="cb-report__chartbox">
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={chartData} margin={{ top: 6, right: 12, left: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e8eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                    <YAxis
+                      tickFormatter={(v) => formatMoney(Number(v))}
+                      width={56}
+                      tick={{ fontSize: 10 }}
+                    />
+                    <Tooltip
+                      formatter={(value: number) => [formatMoney(value), chartKey]}
+                      labelFormatter={(l) => String(l)}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey={chartKey}
+                      stroke="#30b06e"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
         </>
       )}
     </main>

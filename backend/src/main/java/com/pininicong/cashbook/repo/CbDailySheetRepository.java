@@ -1,7 +1,7 @@
 package com.pininicong.cashbook.repo;
 
 import com.pininicong.cashbook.domain.CbDailySheet;
-import java.time.LocalDate;
+import com.pininicong.cashbook.domain.DailySheetKey;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface CbDailySheetRepository extends JpaRepository<CbDailySheet, LocalDate> {}
+public interface CbDailySheetRepository extends JpaRepository<CbDailySheet, DailySheetKey> {}

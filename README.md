@@ -68,9 +68,10 @@ cd backend
 .\gradlew.bat clean bootJar --no-daemon
 ```
 
-3. 실행:
+3. 실행 (`backend` 폴더에서):
 
 ```powershell
+cd backend
 java -jar build\libs\pininicong-cashbook-0.0.1-SNAPSHOT.jar
 ```
 

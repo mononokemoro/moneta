@@ -1,5 +1,6 @@
 package com.pininicong.cashbook.dto;
 
+import com.pininicong.cashbook.domain.LedgerBook;
 import com.pininicong.cashbook.domain.TxType;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -13,4 +14,5 @@ public record TransactionCreateRequest(
         String category,
         String cardName,
         String remarks,
-        BigDecimal accumulatedAmount) {}
+        BigDecimal accumulatedAmount,
+        LedgerBook book) {}

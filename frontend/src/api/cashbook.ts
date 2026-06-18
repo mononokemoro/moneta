@@ -1,3 +1,5 @@
+import type { LedgerBook } from "./ledgerBook";
+
 export type TxType = "EXPENSE" | "INCOME" | "SAVINGS";
 
 const NO_STORE_INIT: RequestInit = {
@@ -26,7 +28,18 @@ export interface SavingsRow {
   remarks: string;
 }
 
+export interface FixedItem {
+  id: number;
+  title: string;
+  defaultAmount: number;
+  category: string;
+  cardName: string;
+  txType: TxType;
+}
+
 export interface DayView {
+  book: string;
+  bookLabel: string;
   date: string;
   yearMonth: string;
   budget: {
@@ -41,17 +54,25 @@ export interface DayView {
   savings: SavingsRow[];
   scheduleNote: string;
   dayMemo: string;
-  paymentSummary: {
-    cash: number;
-    creditCard: number;
-    debitCard: number;
-    otherCard: number;
-  };
+  paymentSummary: PaymentSummary;
+  monthlyPaymentSummary: PaymentSummary;
+  fixedItems?: FixedItem[];
 }
 
-export async function fetchDay(date: string): Promise<DayView> {
+export interface PaymentSummary {
+  cash: number;
+  creditCard: number;
+  debitCard: number;
+  otherCard: number;
+}
+
+function bookQuery(book: LedgerBook): string {
+  return `book=${encodeURIComponent(book)}`;
+}
+
+export async function fetchDay(date: string, book: LedgerBook = "PERSONAL"): Promise<DayView> {
   const ts = Date.now();
-  const r = await fetch(`/api/day?date=${encodeURIComponent(date)}&_ts=${ts}`, NO_STORE_INIT);
+  const r = await fetch(`/api/day?date=${encodeURIComponent(date)}&${bookQuery(book)}&_ts=${ts}`, NO_STORE_INIT);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
@@ -65,6 +86,7 @@ export interface CreateTxBody {
   cardName?: string;
   remarks?: string;
   accumulatedAmount?: number;
+  book?: LedgerBook;
 }
 
 export async function createTransaction(body: CreateTxBody): Promise<void> {
@@ -82,8 +104,45 @@ export async function deleteTransaction(id: number): Promise<void> {
   if (!r.ok) throw new Error(await r.text());
 }
 
-export async function updateBudget(yearMonth: string, totalBudget: number): Promise<void> {
-  const r = await fetch(`/api/budget/${encodeURIComponent(yearMonth)}`, {
+export interface UpdateTxBody {
+  title: string;
+  amount: number;
+  category?: string;
+  cardName?: string;
+  remarks?: string;
+  accumulatedAmount?: number;
+}
+
+export async function updateTransaction(id: number, body: UpdateTxBody): Promise<void> {
+  const r = await fetch(`/api/transactions/${id}`, {
+    ...NO_STORE_INIT,
+    method: "PUT",
+    headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function sendFixedItemsToCashbook(
+  txDate: string,
+  entries: { fixedItemId: number; amount: number }[],
+  book: LedgerBook = "PERSONAL"
+): Promise<void> {
+  const r = await fetch("/api/fixed-items/send-to-cashbook", {
+    ...NO_STORE_INIT,
+    method: "POST",
+    headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ txDate, entries, book }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+export async function updateBudget(
+  yearMonth: string,
+  totalBudget: number,
+  book: LedgerBook = "PERSONAL"
+): Promise<void> {
+  const r = await fetch(`/api/budget/${encodeURIComponent(yearMonth)}?${bookQuery(book)}`, {
     ...NO_STORE_INIT,
     method: "PUT",
     headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
@@ -92,8 +151,8 @@ export async function updateBudget(yearMonth: string, totalBudget: number): Prom
   if (!r.ok) throw new Error(await r.text());
 }
 
-export async function updateCashBalance(amount: number): Promise<void> {
-  const r = await fetch("/api/cash-balance", {
+export async function updateCashBalance(amount: number, book: LedgerBook = "PERSONAL"): Promise<void> {
+  const r = await fetch(`/api/cash-balance?${bookQuery(book)}`, {
     ...NO_STORE_INIT,
     method: "PUT",
     headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
@@ -105,14 +164,18 @@ export async function updateCashBalance(amount: number): Promise<void> {
 export async function updateDailySheet(
   date: string,
   scheduleNote: string,
-  dayMemo: string
+  dayMemo: string,
+  book: LedgerBook = "PERSONAL"
 ): Promise<void> {
   const ts = Date.now();
-  const r = await fetch(`/api/day/${encodeURIComponent(date)}/sheet?_ts=${ts}`, {
-    ...NO_STORE_INIT,
-    method: "PUT",
-    headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
-    body: JSON.stringify({ scheduleNote, dayMemo }),
-  });
+  const r = await fetch(
+    `/api/day/${encodeURIComponent(date)}/sheet?${bookQuery(book)}&_ts=${ts}`,
+    {
+      ...NO_STORE_INIT,
+      method: "PUT",
+      headers: { ...NO_STORE_HEADERS, "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduleNote, dayMemo }),
+    }
+  );
   if (!r.ok) throw new Error(await r.text());
 }

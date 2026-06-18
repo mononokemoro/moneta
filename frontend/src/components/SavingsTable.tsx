@@ -1,46 +1,124 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SavingsRow } from "../api/cashbook";
-import { createTransaction, deleteTransaction } from "../api/cashbook";
+import { createTransaction, deleteTransaction, updateTransaction } from "../api/cashbook";
+import type { LedgerBook } from "../api/ledgerBook";
 import { formatMoney } from "../formatMoney";
+import { amountToInput, parseAmount } from "../util/parseAmount";
+import { buildTableDrafts } from "../util/tableDrafts";
+import { CategoryDatalist } from "./CategoryDatalist";
+
+type RowDraft = {
+  key: string;
+  id?: number;
+  title: string;
+  amount: string;
+  accumulated: string;
+  remarks: string;
+};
 
 type Props = {
+  book: LedgerBook;
   txDate: string;
   rows: SavingsRow[];
   selected: Set<number>;
   onToggle: (id: number, checked: boolean) => void;
   onReload: () => Promise<void>;
+  titleOptions?: string[];
 };
 
-export function SavingsTable({ txDate, rows, selected, onToggle, onReload }: Props) {
-  const [draft, setDraft] = useState({
+function emptyDraft(): RowDraft {
+  return {
+    key: `new-${Math.random().toString(36).slice(2)}`,
     title: "",
     amount: "",
     accumulated: "",
     remarks: "",
-  });
+  };
+}
+
+function fromRow(r: SavingsRow): RowDraft {
+  return {
+    key: String(r.id),
+    id: r.id,
+    title: r.title,
+    amount: amountToInput(r.amount),
+    accumulated: amountToInput(r.accumulatedAmount),
+    remarks: r.remarks,
+  };
+}
+
+function hasContent(d: RowDraft): boolean {
+  return !!(d.title.trim() || d.amount.trim() || d.accumulated.trim() || d.remarks.trim());
+}
+
+function rowChanged(d: RowDraft, r: SavingsRow): boolean {
+  return (
+    d.title !== r.title ||
+    parseAmount(d.amount) !== r.amount ||
+    parseAmount(d.accumulated) !== r.accumulatedAmount ||
+    d.remarks !== r.remarks
+  );
+}
+
+export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload, titleOptions = [] }: Props) {
+  const [drafts, setDrafts] = useState<RowDraft[]>([]);
   const [busy, setBusy] = useState(false);
-  const addFormRef = useRef<HTMLFormElement | null>(null);
+  const newRowRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDrafts(buildTableDrafts(rows.map(fromRow), emptyDraft));
+  }, [rows, txDate]);
 
   const sum = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
+  function patch(key: string, patch: Partial<RowDraft>) {
+    setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+  }
+
+  async function commitRow(d: RowDraft) {
+    if (busy) return;
+    const orig = d.id ? rows.find((r) => r.id === d.id) : undefined;
+
+    if (!d.id) {
+      if (!hasContent(d)) return;
+      setBusy(true);
+      try {
+        await createTransaction({
+          txDate,
+          txType: "SAVINGS",
+          title: d.title.trim() || "(미입력)",
+          amount: parseAmount(d.amount),
+          category: "저축",
+          remarks: d.remarks,
+          accumulatedAmount: parseAmount(d.accumulated),
+          book,
+        });
+        await onReload();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    if (!orig || !rowChanged(d, orig)) return;
     setBusy(true);
     try {
-      await createTransaction({
-        txDate,
-        txType: "SAVINGS",
-        title: draft.title || "(미입력)",
-        amount: Number(draft.amount.replace(/,/g, "")) || 0,
+      await updateTransaction(d.id, {
+        title: d.title.trim() || "(미입력)",
+        amount: parseAmount(d.amount),
         category: "저축",
-        remarks: draft.remarks,
-        accumulatedAmount: Number(draft.accumulated.replace(/,/g, "")) || 0,
+        remarks: d.remarks,
+        accumulatedAmount: parseAmount(d.accumulated),
       });
-      setDraft({ title: "", amount: "", accumulated: "", remarks: "" });
       await onReload();
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleRowBlur(d: RowDraft, e: React.FocusEvent<HTMLTableRowElement>) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    void commitRow(d);
   }
 
   async function handleDeleteSelected() {
@@ -56,9 +134,8 @@ export function SavingsTable({ txDate, rows, selected, onToggle, onReload }: Pro
     }
   }
 
-  function focusAddRow() {
-    const firstInput = addFormRef.current?.querySelector("input");
-    firstInput?.focus();
+  function focusNewRow() {
+    newRowRef.current?.focus();
   }
 
   return (
@@ -70,7 +147,7 @@ export function SavingsTable({ txDate, rows, selected, onToggle, onReload }: Pro
             <span>저축 / 보험</span>
           </div>
           <div className="cb-panel__headActions">
-            <button type="button" className="cb-panel__headBtn" onClick={focusAddRow}>
+            <button type="button" className="cb-panel__headBtn" onClick={focusNewRow}>
               + 행추가
             </button>
             <button
@@ -85,7 +162,8 @@ export function SavingsTable({ txDate, rows, selected, onToggle, onReload }: Pro
         </div>
       </div>
       <div className="cb-panel__tablewrap">
-        <table className="cb-table">
+        <CategoryDatalist id="sav-titles" options={titleOptions} />
+        <table className="cb-table cb-table--inline">
           <thead>
             <tr>
               <th className="cb-col-check" />
@@ -96,60 +174,68 @@ export function SavingsTable({ txDate, rows, selected, onToggle, onReload }: Pro
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
+            {drafts.map((d, idx) => (
+              <tr
+                key={d.key}
+                className={d.id ? "cb-row--saved" : "cb-row--new"}
+                onBlur={(e) => handleRowBlur(d, e)}
+              >
+                <td>
+                  {d.id ? (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(d.id)}
+                      onChange={(e) => onToggle(d.id!, e.target.checked)}
+                    />
+                  ) : null}
+                </td>
                 <td>
                   <input
-                    type="checkbox"
-                    checked={selected.has(r.id)}
-                    onChange={(e) => onToggle(r.id, e.target.checked)}
+                    ref={idx === drafts.length - 1 ? newRowRef : undefined}
+                    className="cb-cell"
+                    list={titleOptions.length > 0 ? "sav-titles" : undefined}
+                    value={d.title}
+                    onChange={(e) => patch(d.key, { title: e.target.value })}
+                    disabled={busy}
                   />
                 </td>
-                <td>{r.title}</td>
-                <td className="cb-num">{formatMoney(r.amount)}</td>
-                <td className="cb-num">{formatMoney(r.accumulatedAmount)}</td>
-                <td>{r.remarks}</td>
+                <td>
+                  <input
+                    className="cb-cell cb-num"
+                    value={d.amount}
+                    onChange={(e) => patch(d.key, { amount: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="cb-cell cb-num"
+                    value={d.accumulated}
+                    onChange={(e) => patch(d.key, { accumulated: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="cb-cell"
+                    value={d.remarks}
+                    onChange={(e) => patch(d.key, { remarks: e.target.value })}
+                    disabled={busy}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr className="cb-tfoot">
               <td colSpan={5}>
-                <span className="cb-meta">{rows.length}건</span>
+                <span className="cb-meta">총 {rows.length}건</span>
                 <span className="cb-meta cb-meta--sum">불입 합계 {formatMoney(sum)}원</span>
               </td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <form ref={addFormRef} className="cb-addrow" onSubmit={handleAdd}>
-        <span className="cb-addrow__label">행 추가</span>
-        <input
-          placeholder="항목"
-          value={draft.title}
-          onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-        />
-        <input
-          placeholder="불입금액"
-          className="cb-num"
-          value={draft.amount}
-          onChange={(e) => setDraft((d) => ({ ...d, amount: e.target.value }))}
-        />
-        <input
-          placeholder="누적금액"
-          className="cb-num"
-          value={draft.accumulated}
-          onChange={(e) => setDraft((d) => ({ ...d, accumulated: e.target.value }))}
-        />
-        <input
-          placeholder="비고"
-          value={draft.remarks}
-          onChange={(e) => setDraft((d) => ({ ...d, remarks: e.target.value }))}
-        />
-        <button type="submit" className="cb-btn cb-btn--primary" disabled={busy}>
-          등록
-        </button>
-      </form>
     </section>
   );
 }

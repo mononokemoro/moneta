@@ -27,6 +27,18 @@ export function addMonths(iso: string, delta: number): string {
   return toIsoDate(dt);
 }
 
+export function addDays(iso: string, delta: number): string {
+  const dt = parseIso(iso);
+  dt.setDate(dt.getDate() + delta);
+  return toIsoDate(dt);
+}
+
+/** 예: 2026.06.18 */
+export function formatVisitDate(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-");
+  return `${y}.${m}.${d}`;
+}
+
 /** 해당 월의 일 수 */
 export function daysInMonth(year: number, month1Based: number): number {
   return new Date(year, month1Based, 0).getDate();

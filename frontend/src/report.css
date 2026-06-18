@@ -17,7 +17,7 @@
 .cb-report {
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
   background: var(--surface-1);
   border: 1px solid var(--toss-gray-200);
   border-radius: var(--radius-lg);
@@ -32,6 +32,11 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.cb-report__top .cb-bookSwitch {
+  flex: 0 0 100%;
+  margin-bottom: 0;
 }
 
 .cb-report__mainTabs {
@@ -53,6 +58,38 @@
   border-color: var(--toss-blue);
   background: var(--toss-blue-soft);
   color: var(--toss-blue);
+}
+
+.cb-report__subTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cb-report__subTabs button {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--toss-gray-200);
+  background: var(--surface-1);
+  font-size: 11px;
+}
+
+.cb-report__subTabs button.is-active {
+  border-color: var(--toss-gray-700);
+  background: var(--toss-gray-100);
+  font-weight: 700;
+}
+
+.cb-report__yearNav {
+  min-width: 32px !important;
+  padding: 8px 6px !important;
+  font-weight: 400 !important;
+}
+
+.cb-report__yearNav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .cb-report__actions {
@@ -215,6 +252,71 @@
   border: 1px solid var(--toss-gray-200);
   border-radius: var(--radius-md);
   padding: 12px 8px 4px;
+}
+
+.cb-report-table--detail thead th,
+.cb-report-table--detail tbody td {
+  font-size: 10px;
+  padding: 5px 6px;
+}
+
+.cb-report-cal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cb-report-cal__month {
+  border: 1px solid var(--toss-gray-200);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  background: var(--toss-gray-50);
+}
+
+.cb-report-cal__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cb-report-cal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 9px;
+  color: var(--toss-gray-500);
+  margin-bottom: 4px;
+}
+
+.cb-report-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cb-report-cal__cell {
+  min-height: 36px;
+  border-radius: 4px;
+  padding: 2px;
+  font-size: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cb-report-cal__cell--empty {
+  visibility: hidden;
+}
+
+.cb-report-cal__day {
+  font-weight: 600;
+}
+
+.cb-report-cal__amt {
+  color: var(--toss-blue);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 @media print {
