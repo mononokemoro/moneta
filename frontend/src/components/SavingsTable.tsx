@@ -139,7 +139,7 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
   }
 
   return (
-    <section className="cb-panel">
+    <section className="cb-panel cb-panel--excel">
       <div className="cb-panel__head cb-th cb-th--savings">
         <div className="cb-panel__headInner">
           <div className="cb-panel__title">
@@ -163,7 +163,7 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
       </div>
       <div className="cb-panel__tablewrap">
         <CategoryDatalist id="sav-titles" options={titleOptions} />
-        <table className="cb-table cb-table--inline">
+        <table className="cb-table cb-table--inline cb-table--excel">
           <thead>
             <tr>
               <th className="cb-col-check" />

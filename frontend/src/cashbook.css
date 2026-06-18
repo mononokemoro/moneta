@@ -477,6 +477,125 @@
   font-weight: 700;
 }
 
+/* 엑셀형 내역 입력 그리드 (다크 테마) */
+.cb-panel--excel {
+  --xl-border: #3a4554;
+  --xl-grid: #2c3542;
+  --xl-head-bg: #252b34;
+  --xl-cell-bg: #1a1f27;
+  --xl-alt-bg: #1f252e;
+  --xl-foot-bg: #222831;
+  --xl-text: #dce8f8;
+  --xl-muted: #90a0b8;
+  --xl-focus: #6b9fd4;
+  --xl-focus-bg: #243041;
+}
+
+.cb-panel--excel .cb-panel__tablewrap {
+  border: 1px solid var(--xl-border);
+  border-top: 0;
+  background: var(--xl-cell-bg);
+}
+
+.cb-panel--excel .cb-table--excel {
+  font-size: 11px;
+  color: var(--xl-text);
+}
+
+.cb-panel--excel .cb-table--excel thead th {
+  text-align: center;
+  color: var(--xl-text);
+  background: var(--xl-head-bg);
+  font-weight: 700;
+  padding: 4px 6px;
+  border: 1px solid var(--xl-grid);
+  border-bottom-color: var(--xl-border);
+  white-space: nowrap;
+}
+
+.cb-panel--excel .cb-table--excel thead th.cb-num {
+  text-align: center !important;
+}
+
+.cb-panel--excel .cb-table--excel tbody td {
+  padding: 0;
+  border: 1px solid var(--xl-grid);
+  color: var(--xl-text);
+  background: var(--xl-cell-bg);
+  vertical-align: middle;
+  height: 24px;
+}
+
+.cb-panel--excel .cb-table--excel tbody tr:nth-child(even) td {
+  background: var(--xl-alt-bg);
+}
+
+.cb-panel--excel .cb-table--inline.cb-table--excel .cb-cell {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--xl-text);
+  font-size: 11px;
+  padding: 3px 5px;
+  min-height: 22px;
+  line-height: 1.3;
+}
+
+.cb-panel--excel .cb-table--inline.cb-table--excel .cb-cell:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--xl-focus);
+  background: var(--xl-focus-bg);
+}
+
+.cb-panel--excel .cb-table--inline.cb-table--excel .cb-cell.cb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cb-panel--excel .cb-row--new .cb-cell {
+  border: none;
+  border-style: none;
+}
+
+.cb-panel--excel .cb-col-check {
+  width: 28px;
+}
+
+.cb-panel--excel .cb-table--excel thead th.cb-col-check {
+  background: var(--xl-head-bg);
+}
+
+.cb-panel--excel .cb-table--excel tbody td:first-child {
+  text-align: center;
+  width: 28px;
+}
+
+.cb-panel--excel .cb-col-scope {
+  width: 2.75rem;
+  text-align: center;
+}
+
+.cb-panel--excel .cb-scope-check {
+  accent-color: var(--xl-focus);
+}
+
+.cb-panel--excel .cb-tfoot td {
+  padding: 5px 8px;
+  background: var(--xl-foot-bg);
+  border: 1px solid var(--xl-grid);
+  border-top: 2px solid var(--xl-border);
+  color: var(--xl-muted);
+}
+
+.cb-panel--excel .cb-meta {
+  color: var(--xl-muted);
+}
+
+.cb-panel--excel .cb-meta--sum {
+  color: var(--xl-text);
+  font-weight: 700;
+}
+
 .cb-toolbar {
   padding: 3px 0;
 }

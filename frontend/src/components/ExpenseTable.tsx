@@ -205,7 +205,7 @@ export function ExpenseTable({
   const icon = variant === "expense" ? "↓" : "↑";
 
   return (
-    <section className="cb-panel">
+    <section className="cb-panel cb-panel--excel">
       <div className={`cb-panel__head ${hdrCls}`}>
         <div className="cb-panel__headInner">
           <div className="cb-panel__title">
@@ -229,7 +229,7 @@ export function ExpenseTable({
       </div>
       <div className="cb-panel__tablewrap">
         <CategoryDatalist id={catListId} options={categoryOptions} />
-        <table className="cb-table cb-table--inline">
+        <table className="cb-table cb-table--inline cb-table--excel">
           <thead>
             <tr>
               <th className="cb-col-check" />
