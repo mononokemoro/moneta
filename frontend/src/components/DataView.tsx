@@ -2,24 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   downloadDatabaseBackup,
+  executeSqlQuery,
   fetchDatabaseOverview,
   fetchTableRows,
   readBackupFile,
   restoreDatabaseBackup,
   triggerBackupDownload,
   type DatabaseOverview,
+  type SqlQueryResponse,
   type TableRowsResponse,
   type TableSummary,
 } from "../api/databaseAdmin";
 
-type DataSection = "overview" | "tables" | "relations" | "backup";
+type DataSection = "overview" | "tables" | "query" | "backup";
 
 const SECTIONS: { id: DataSection; label: string }[] = [
-  { id: "overview", label: "개요" },
-  { id: "tables", label: "테이블" },
-  { id: "relations", label: "연계" },
-  { id: "backup", label: "백업/복원" },
+  { id: "overview", label: "Overview" },
+  { id: "tables", label: "Tables" },
+  { id: "query", label: "SQL" },
+  { id: "backup", label: "Backup" },
 ];
+
+const DEFAULT_SQL = `SELECT id, book, tx_date, tx_type, title, amount, category
+FROM cb_transaction
+ORDER BY id DESC`;
 
 function relationKindClass(kind: string): string {
   if (kind.toLowerCase().includes("fk")) return "fk";
@@ -32,6 +38,189 @@ function formatCell(value: unknown): string {
   if (value == null) return "—";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
+}
+
+function QueryResults({ result }: { result: SqlQueryResponse }) {
+  if (result.columns.length === 0) {
+    return <p className="cb-muted">결과가 없습니다.</p>;
+  }
+  return (
+    <div className="cb-data__scrollX">
+      <table className="cb-data__rowsTable">
+        <thead>
+          <tr>
+            {result.columns.map((col) => (
+              <th key={col}>
+                <code>{col}</code>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {result.rows.map((row, i) => (
+            <tr key={i}>
+              {result.columns.map((col) => (
+                <td key={col} className="cb-data__mono" title={formatCell(row[col])}>
+                  {formatCell(row[col])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SqlQueryPanel({ tables }: { tables: TableSummary[] }) {
+  const [sql, setSql] = useState(DEFAULT_SQL);
+  const [limit, setLimit] = useState("200");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [result, setResult] = useState<SqlQueryResponse | null>(null);
+
+  async function runQuery() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const parsedLimit = Math.min(500, Math.max(1, Number(limit.replace(/,/g, "")) || 200));
+      const data = await executeSqlQuery(sql, parsedLimit);
+      setResult(data);
+    } catch (e: unknown) {
+      setResult(null);
+      setErr(e instanceof Error ? e.message : "쿼리 실행 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="cb-data__panel cb-data__panel--query">
+      <p className="cb-data__hint">
+        SELECT 문만 실행됩니다 (최대 500행). Ctrl+Enter로 실행할 수 있습니다.
+      </p>
+
+      <div className="cb-data__queryShortcuts">
+        <span className="cb-data__queryShortcutsLabel">테이블:</span>
+        {tables.map((t) => (
+          <button
+            key={t.name}
+            type="button"
+            className="cb-btn cb-btn--ghost cb-btn--xs cb-data__queryTableBtn"
+            title={t.name}
+            onClick={() =>
+              setSql(`SELECT *\nFROM ${t.name}\nORDER BY 1\nFETCH FIRST 50 ROWS ONLY`)
+            }
+          >
+            {t.description}
+          </button>
+        ))}
+      </div>
+
+      <label className="cb-data__sqlLabel">
+        SQL
+        <textarea
+          className="cb-data__sqlInput"
+          value={sql}
+          spellCheck={false}
+          rows={8}
+          onChange={(e) => setSql(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              void runQuery();
+            }
+          }}
+        />
+      </label>
+
+      <div className="cb-data__queryActions">
+        <label className="cb-data__queryLimit">
+          최대 행
+          <input
+            className="cb-data__queryLimitInput"
+            type="text"
+            inputMode="numeric"
+            value={limit}
+            onChange={(e) => setLimit(e.target.value.replace(/[^\d]/g, ""))}
+          />
+        </label>
+        <button
+          type="button"
+          className="cb-btn cb-btn--primary"
+          disabled={busy || !sql.trim()}
+          onClick={() => void runQuery()}
+        >
+          {busy ? "실행 중…" : "실행"}
+        </button>
+      </div>
+
+      {err && <p className="cb-data__error">{err}</p>}
+
+      {result && (
+        <div className="cb-data__queryResult">
+          <p className="cb-data__queryMeta">
+            {result.rowCount.toLocaleString()}행 · {result.elapsedMs}ms
+            {result.rowCount >= result.limit ? ` (최대 ${result.limit}행)` : ""}
+          </p>
+          <QueryResults result={result} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RelationsPanel({ relations }: { relations: DatabaseOverview["relations"] }) {
+  return (
+    <section className="cb-data__relations" aria-label="테이블 연계">
+      <div className="cb-data__relationsHead">
+        <h2 className="cb-data__sectionTitle">테이블 연계</h2>
+        <p className="cb-data__hint">
+          JPA 엔티티 간 논리적 연계입니다. DB에 물리 FK가 없는 soft/partition 관계도 포함합니다.
+        </p>
+      </div>
+      <div className="cb-data__scrollX cb-data__scrollX--relations">
+        <table className="cb-data__relationTable">
+          <thead>
+            <tr>
+              <th>출발</th>
+              <th>컬럼</th>
+              <th>→</th>
+              <th>대상</th>
+              <th>컬럼</th>
+              <th>종류</th>
+              <th>설명</th>
+            </tr>
+          </thead>
+          <tbody>
+            {relations.map((r, i) => (
+              <tr key={i}>
+                <td>
+                  <code>{r.fromTable}</code>
+                </td>
+                <td>
+                  <code>{r.fromColumn}</code>
+                </td>
+                <td>→</td>
+                <td>
+                  <code>{r.toTable}</code>
+                </td>
+                <td>
+                  <code>{r.toColumn}</code>
+                </td>
+                <td>
+                  <span className={`cb-data__kind cb-data__kind--${relationKindClass(r.kind)}`}>
+                    {r.kind}
+                  </span>
+                </td>
+                <td>{r.description}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 }
 
 function TableDetail({ table }: { table: TableSummary }) {
@@ -270,7 +459,7 @@ export function DataView() {
               <dt>스키마</dt>
               <dd>{overview.schema}</dd>
             </div>
-            <div className="cb-data__metaWide">
+            <div className="cb-data__metaGrow">
               <dt>JDBC URL</dt>
               <dd className="cb-data__mono">{overview.jdbcUrl}</dd>
             </div>
@@ -308,6 +497,8 @@ export function DataView() {
               ))}
             </tbody>
           </table>
+
+          <RelationsPanel relations={overview.relations} />
         </section>
       )}
 
@@ -337,50 +528,8 @@ export function DataView() {
         </section>
       )}
 
-      {!loading && overview && section === "relations" && (
-        <section className="cb-data__panel">
-          <p className="cb-data__hint">
-            JPA 엔티티 간 논리적 연계입니다. DB에 물리 FK가 없는 soft/partition 관계도 포함합니다.
-          </p>
-          <table className="cb-data__relationTable">
-            <thead>
-              <tr>
-                <th>출발</th>
-                <th>컬럼</th>
-                <th>→</th>
-                <th>대상</th>
-                <th>컬럼</th>
-                <th>종류</th>
-                <th>설명</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.relations.map((r, i) => (
-                <tr key={i}>
-                  <td>
-                    <code>{r.fromTable}</code>
-                  </td>
-                  <td>
-                    <code>{r.fromColumn}</code>
-                  </td>
-                  <td>→</td>
-                  <td>
-                    <code>{r.toTable}</code>
-                  </td>
-                  <td>
-                    <code>{r.toColumn}</code>
-                  </td>
-                  <td>
-                    <span className={`cb-data__kind cb-data__kind--${relationKindClass(r.kind)}`}>
-                      {r.kind}
-                    </span>
-                  </td>
-                  <td>{r.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+      {!loading && overview && section === "query" && (
+        <SqlQueryPanel tables={overview.tables} />
       )}
 
       {section === "backup" && (

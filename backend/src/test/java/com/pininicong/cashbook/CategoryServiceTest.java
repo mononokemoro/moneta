@@ -70,7 +70,7 @@ class CategoryServiceTest {
 
         var main =
                 tree.income().stream().filter(g -> "주수입".equals(g.name())).findFirst().orElseThrow();
-        assertThat(main.children()).extracting("name").contains("급여", "상여", "사업", "기타");
+        assertThat(main.children()).extracting("name").contains("급여", "상여", "기타");
 
         var excluded =
                 tree.income().stream().filter(g -> "수입제외".equals(g.name())).findFirst().orElseThrow();

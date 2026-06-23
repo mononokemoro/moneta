@@ -3,6 +3,8 @@ package com.pininicong.cashbook.api;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.BackupExport;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.DatabaseOverview;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.RestoreResult;
+import com.pininicong.cashbook.dto.DatabaseAdminDto.SqlQueryRequest;
+import com.pininicong.cashbook.dto.DatabaseAdminDto.SqlQueryResponse;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.TableRowsResponse;
 import com.pininicong.cashbook.service.DatabaseAdminService;
 import org.springframework.http.HttpHeaders;
@@ -51,5 +53,10 @@ public class DatabaseAdminController {
     @PostMapping(value = "/restore", consumes = MediaType.APPLICATION_JSON_VALUE)
     public RestoreResult restore(@RequestBody BackupExport backup) {
         return adminService.restoreBackup(backup);
+    }
+
+    @PostMapping(value = "/query", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public SqlQueryResponse query(@RequestBody SqlQueryRequest req) {
+        return adminService.executeQuery(req.sql(), req.limit());
     }
 }

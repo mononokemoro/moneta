@@ -59,4 +59,14 @@ public final class DatabaseAdminDto {
             String restoredAt,
             Map<String, Integer> rowCounts,
             long totalRows) {}
+
+    public record SqlQueryRequest(String sql, Integer limit) {}
+
+    public record SqlQueryResponse(
+            List<String> columns,
+            List<Map<String, Object>> rows,
+            int rowCount,
+            long elapsedMs,
+            int limit,
+            String sql) {}
 }

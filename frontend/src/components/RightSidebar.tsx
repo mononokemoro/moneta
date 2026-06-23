@@ -26,7 +26,27 @@ export function RightSidebar({ view, onViewChange, date, day }: Props) {
   return (
     <aside className="cb-side cb-side--right">
       <div className="cb-profile">
-        <div className="cb-profile__avatar" aria-hidden />
+        <button
+          type="button"
+          className={`cb-profile__settings${view === "settings" ? " is-active" : ""}`}
+          aria-label="설정"
+          aria-current={view === "settings" ? "page" : undefined}
+          onClick={() => onViewChange("settings")}
+        >
+          <svg
+            className="cb-profile__settingsIcon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <circle cx="12" cy="12" r="3" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M19.78 19.78l-1.42-1.42M5.64 5.64l-1.42-1.42" />
+          </svg>
+        </button>
         <div className="cb-profile__txt">
           <div className="cb-profile__name">미니가계부</div>
           <div className="cb-profile__sub">
@@ -42,16 +62,6 @@ export function RightSidebar({ view, onViewChange, date, day }: Props) {
           </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        className={`cb-side__settings${view === "settings" ? " is-active" : ""}`}
-        aria-label="설정"
-        aria-current={view === "settings" ? "page" : undefined}
-        onClick={() => onViewChange("settings")}
-      >
-        설정
-      </button>
 
       <nav className="cb-tabs" aria-label="보조 메뉴">
         <button

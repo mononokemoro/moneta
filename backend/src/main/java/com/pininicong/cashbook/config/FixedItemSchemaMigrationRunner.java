@@ -23,9 +23,37 @@ public class FixedItemSchemaMigrationRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        ensureColumns();
         backfillDefaults();
         backfillKindFromTxType();
         backfillDailyScheduleForLegacyRows();
+    }
+
+    /** Hibernate ddl-auto가 누락한 컬럼을 보강합니다 (구버전 DB 호환). */
+    private void ensureColumns() {
+        addColumnIfMissing("kind", "varchar(16)");
+        addColumnIfMissing("schedule_type", "varchar(16)");
+        addColumnIfMissing("day_of_month", "integer");
+        addColumnIfMissing("last_day_of_month", "boolean");
+        addColumnIfMissing("holiday_adjust", "varchar(16)");
+        addColumnIfMissing("period_type", "varchar(16)");
+        addColumnIfMissing("period_start", "date");
+        addColumnIfMissing("period_end", "date");
+        addColumnIfMissing("remarks", "varchar(500)");
+        addColumnIfMissing("interest_amount", "decimal(19,2)");
+        addColumnIfMissing("payment_method", "varchar(40)");
+    }
+
+    private void addColumnIfMissing(String column, String type) {
+        try {
+            jdbc.execute(
+                    "ALTER TABLE cb_fixed_item ADD COLUMN IF NOT EXISTS "
+                            + column
+                            + " "
+                            + type);
+        } catch (Exception e) {
+            log.warn("cb_fixed_item column ensure skipped ({}): {}", column, e.getMessage());
+        }
     }
 
     private void backfillDefaults() {

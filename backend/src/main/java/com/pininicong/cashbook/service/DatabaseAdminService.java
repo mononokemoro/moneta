@@ -6,6 +6,7 @@ import com.pininicong.cashbook.dto.DatabaseAdminDto.ColumnInfo;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.DatabaseOverview;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.RestoreResult;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.TableRelation;
+import com.pininicong.cashbook.dto.DatabaseAdminDto.SqlQueryResponse;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.TableRowsResponse;
 import com.pininicong.cashbook.dto.DatabaseAdminDto.TableSummary;
 import java.sql.Connection;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import com.pininicong.cashbook.support.DatabaseMetadataCatalog;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -114,6 +116,63 @@ public class DatabaseAdminService {
                         safeOffset,
                         safeLimit);
         return new TableRowsResponse(normalized, total, safeOffset, safeLimit, columns, rows);
+    }
+
+    private static final Pattern FORBIDDEN_SQL =
+            Pattern.compile(
+                    "\\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|MERGE|REPLACE|GRANT|REVOKE|CALL|EXEC|EXECUTE|SCRIPT)\\b",
+                    Pattern.CASE_INSENSITIVE);
+
+    public SqlQueryResponse executeQuery(String sql, Integer limit) {
+        String normalized = validateReadOnlySql(sql);
+        int safeLimit = Math.min(Math.max(limit == null ? 200 : limit, 1), 500);
+        long started = System.nanoTime();
+        List<String> columns = new ArrayList<>();
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        jdbc.query(
+                normalized,
+                rs -> {
+                    if (columns.isEmpty()) {
+                        var meta = rs.getMetaData();
+                        int count = meta.getColumnCount();
+                        for (int i = 1; i <= count; i++) {
+                            columns.add(meta.getColumnLabel(i).toLowerCase(Locale.ROOT));
+                        }
+                    }
+                    if (rows.size() >= safeLimit) {
+                        return;
+                    }
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    for (int i = 0; i < columns.size(); i++) {
+                        row.put(columns.get(i), rs.getObject(i + 1));
+                    }
+                    rows.add(row);
+                });
+
+        long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
+        return new SqlQueryResponse(columns, rows, rows.size(), elapsedMs, safeLimit, normalized);
+    }
+
+    static String validateReadOnlySql(String sql) {
+        if (sql == null || sql.isBlank()) {
+            throw new IllegalArgumentException("SQL을 입력하세요.");
+        }
+        String trimmed = sql.strip();
+        while (trimmed.endsWith(";")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1).strip();
+        }
+        if (trimmed.contains(";")) {
+            throw new IllegalArgumentException("한 번에 하나의 SELECT 문만 실행할 수 있습니다.");
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
+            throw new IllegalArgumentException("SELECT 문만 실행할 수 있습니다.");
+        }
+        if (FORBIDDEN_SQL.matcher(trimmed).find()) {
+            throw new IllegalArgumentException("허용되지 않는 SQL 키워드가 포함되어 있습니다.");
+        }
+        return trimmed;
     }
 
     public BackupExport exportBackup() {

@@ -13,7 +13,7 @@ public final class MonetaIncomeCategoryCatalog {
 
     public static final List<Group> GROUPS =
             List.of(
-                    new Group("주수입", List.of("급여", "상여", "사업", "기타")),
+                    new Group("주수입", List.of("급여", "상여", "기타")),
                     new Group("부수입", List.of("이자", "기타", "주식", "적립", "오류", "티켓")),
                     new Group("전월이월", List.of("전월이월")),
                     new Group("수입제외", List.of("가계환급", "수입제외")));

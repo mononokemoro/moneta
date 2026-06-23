@@ -296,7 +296,36 @@ public class CategoryService {
         }
 
         changed += cleanupCatalogMajors(ledger, type, groups, assignedMinorIds, minorToMajor);
+        changed += removeStaleCatalogMinors(ledger, type, minorToMajor);
         return changed;
+    }
+
+    /** 카탈로그에서 빠진 기본 소분류 중 미사용 항목을 제거합니다. */
+    private int removeStaleCatalogMinors(
+            LedgerBook ledger, CategoryType type, Map<String, String> minorToMajor) {
+        if (type != CategoryType.INCOME
+                && !(type == CategoryType.EXPENSE && ledger == LedgerBook.PERSONAL)) {
+            return 0;
+        }
+        Set<String> catalogMinors = minorToMajor.keySet();
+        int removed = 0;
+        var minors =
+                categoryRepo.findByBookAndCategoryTypeAndTierOrderBySortOrderAscNameAsc(
+                        ledger, type, CategoryTier.MINOR);
+        for (CbCategory row : minors) {
+            if (Boolean.TRUE.equals(row.getUserCreated())) {
+                continue;
+            }
+            if (catalogMinors.contains(row.getName())) {
+                continue;
+            }
+            if (isCategoryInUse(ledger, row)) {
+                continue;
+            }
+            categoryRepo.delete(row);
+            removed++;
+        }
+        return removed;
     }
 
     private int dissolveLegacyMajors(

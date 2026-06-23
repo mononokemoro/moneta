@@ -70,10 +70,19 @@ export interface RestoreResult {
   totalRows: number;
 }
 
+export interface SqlQueryResponse {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  elapsedMs: number;
+  limit: number;
+  sql: string;
+}
+
 async function parseError(res: Response): Promise<string> {
   try {
-    const body = (await res.json()) as { message?: string };
-    return body.message ?? `HTTP ${res.status}`;
+    const body = (await res.json()) as { message?: string; error?: string };
+    return body.message ?? body.error ?? `HTTP ${res.status}`;
   } catch {
     return `HTTP ${res.status}`;
   }
@@ -92,6 +101,17 @@ export async function fetchTableRows(
 ): Promise<TableRowsResponse> {
   const q = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   const res = await fetch(`/api/database/tables/${encodeURIComponent(table)}/rows?${q}`, NO_STORE);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json();
+}
+
+export async function executeSqlQuery(sql: string, limit = 200): Promise<SqlQueryResponse> {
+  const res = await fetch("/api/database/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...NO_STORE.headers },
+    body: JSON.stringify({ sql, limit }),
+    cache: "no-store",
+  });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json();
 }
