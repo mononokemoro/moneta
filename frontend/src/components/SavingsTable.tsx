@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { SavingsRow } from "../api/cashbook";
-import { createTransaction, deleteTransaction, updateTransaction } from "../api/cashbook";
+import { createTransaction, updateTransaction } from "../api/cashbook";
 import type { LedgerBook } from "../api/ledgerBook";
 import { formatMoney } from "../formatMoney";
-import { amountToInput, parseAmount } from "../util/parseAmount";
+import { amountToInput, formatAmountInput, parseAmount } from "../util/parseAmount";
 import { buildTableDrafts } from "../util/tableDrafts";
-import { CategoryDatalist } from "./CategoryDatalist";
+import { ComboInput } from "./ComboInput";
 
 type RowDraft = {
   key: string;
@@ -24,6 +24,7 @@ type Props = {
   onToggle: (id: number, checked: boolean) => void;
   onReload: () => Promise<void>;
   titleOptions?: string[];
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 function emptyDraft(): RowDraft {
@@ -60,7 +61,15 @@ function rowChanged(d: RowDraft, r: SavingsRow): boolean {
   );
 }
 
-export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload, titleOptions = [] }: Props) {
+function hasUnsavedDrafts(drafts: RowDraft[], rows: SavingsRow[]): boolean {
+  return drafts.some((d) => {
+    if (!d.id) return hasContent(d);
+    const orig = rows.find((r) => r.id === d.id);
+    return orig ? rowChanged(d, orig) : false;
+  });
+}
+
+export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload, titleOptions = [], onDirtyChange }: Props) {
   const [drafts, setDrafts] = useState<RowDraft[]>([]);
   const [busy, setBusy] = useState(false);
   const newRowRef = useRef<HTMLInputElement | null>(null);
@@ -68,6 +77,11 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
   useEffect(() => {
     setDrafts(buildTableDrafts(rows.map(fromRow), emptyDraft));
   }, [rows, txDate]);
+
+  const dirty = hasUnsavedDrafts(drafts, rows);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const sum = rows.reduce((a, r) => a + (Number(r.amount) || 0), 0);
 
@@ -121,19 +135,6 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
     void commitRow(d);
   }
 
-  async function handleDeleteSelected() {
-    if (selected.size === 0) return;
-    setBusy(true);
-    try {
-      for (const id of selected) {
-        await deleteTransaction(id);
-      }
-      await onReload();
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function focusNewRow() {
     newRowRef.current?.focus();
   }
@@ -150,31 +151,30 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
             <button type="button" className="cb-panel__headBtn" onClick={focusNewRow}>
               + 행추가
             </button>
-            <button
-              type="button"
-              className="cb-panel__headBtn"
-              disabled={busy || selected.size === 0}
-              onClick={handleDeleteSelected}
-            >
-              선택 삭제
-            </button>
           </div>
         </div>
       </div>
       <div className="cb-panel__tablewrap">
-        <CategoryDatalist id="sav-titles" options={titleOptions} />
-        <table className="cb-table cb-table--inline cb-table--excel">
-          <thead>
-            <tr>
-              <th className="cb-col-check" />
-              <th>항목</th>
-              <th className="cb-num">불입금액</th>
-              <th className="cb-num">누적금액</th>
-              <th>비고</th>
-            </tr>
-          </thead>
-          <tbody>
-            {drafts.map((d, idx) => (
+        <div className="cb-panel__tablescroll">
+          <table className="cb-table cb-table--inline cb-table--excel cb-table--savings">
+            <colgroup>
+              <col className="cb-col-check" />
+              <col className="cb-col-title" />
+              <col className="cb-col-amount" />
+              <col className="cb-col-accumulated" />
+              <col className="cb-col-remarks" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="cb-col-check" />
+                <th>항목</th>
+                <th className="cb-num">금액</th>
+                <th className="cb-num">누적금액</th>
+                <th>비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drafts.map((d, idx) => (
               <tr
                 key={d.key}
                 className={d.id ? "cb-row--saved" : "cb-row--new"}
@@ -190,12 +190,12 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                   ) : null}
                 </td>
                 <td>
-                  <input
+                  <ComboInput
                     ref={idx === drafts.length - 1 ? newRowRef : undefined}
                     className="cb-cell"
-                    list={titleOptions.length > 0 ? "sav-titles" : undefined}
+                    options={titleOptions}
                     value={d.title}
-                    onChange={(e) => patch(d.key, { title: e.target.value })}
+                    onChange={(v) => patch(d.key, { title: v })}
                     disabled={busy}
                   />
                 </td>
@@ -203,7 +203,7 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                   <input
                     className="cb-cell cb-num"
                     value={d.amount}
-                    onChange={(e) => patch(d.key, { amount: e.target.value })}
+                    onChange={(e) => patch(d.key, { amount: formatAmountInput(e.target.value) })}
                     disabled={busy}
                   />
                 </td>
@@ -211,7 +211,7 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                   <input
                     className="cb-cell cb-num"
                     value={d.accumulated}
-                    onChange={(e) => patch(d.key, { accumulated: e.target.value })}
+                    onChange={(e) => patch(d.key, { accumulated: formatAmountInput(e.target.value) })}
                     disabled={busy}
                   />
                 </td>
@@ -225,16 +225,13 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                 </td>
               </tr>
             ))}
-          </tbody>
-          <tfoot>
-            <tr className="cb-tfoot">
-              <td colSpan={5}>
-                <span className="cb-meta">총 {rows.length}건</span>
-                <span className="cb-meta cb-meta--sum">불입 합계 {formatMoney(sum)}원</span>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            </tbody>
+          </table>
+        </div>
+        <div className="cb-panel__summary">
+          <span className="cb-meta">총 {rows.length}건</span>
+          <span className="cb-meta cb-meta--sum">불입 합계 {formatMoney(sum)}원</span>
+        </div>
       </div>
     </section>
   );

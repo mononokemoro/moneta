@@ -27,8 +27,8 @@ cd backend
 .\gradlew.bat bootRun
 ```
 
-- Health: `GET http://localhost:8080/api/health`
-- H2 콘솔: `http://localhost:8080/h2-console` (설정은 `backend/src/main/resources/application.yml` 과 동일한 JDBC URL 사용)
+- Health: `GET http://localhost:5174/api/health`
+- H2 콘솔: `http://localhost:5174/h2-console` (설정은 `backend/src/main/resources/application.yml` 과 동일한 JDBC URL 사용)
 
 H2 파일 DB는 `./data/` 아래에 생성됩니다(`jdbc:h2:file:./data/pininicong-cashbook`). 실행 위치(CWD)마다 DB 파일 위치가 달라지므로 배포 시 동일 폴더에서 실행하거나 `SPRING_DATASOURCE_URL` 등으로 경로를 고정하세요.
 
@@ -49,7 +49,7 @@ npm install
 npm run dev
 ```
 
-브라우저: `http://localhost:5173` — Vite 가 `/api` 를 `http://localhost:8080` 으로 프록시합니다.
+브라우저: `http://localhost:5173` — Vite 가 `/api` 를 `http://localhost:5174` 으로 프록시합니다.
 
 ## 단일 JAR (UI + API 한 포트)
 
@@ -75,7 +75,7 @@ cd backend
 java -jar build\libs\pininicong-cashbook-0.0.1-SNAPSHOT.jar
 ```
 
-- UI·API: `http://localhost:8080/` — `/api/health` 로 상태 확인
+- UI·API: `http://localhost:5174/` — `/api/health` 로 상태 확인
 
 `frontend/dist` 가 없으면 API 전용 JAR 만 만들어집니다.
 

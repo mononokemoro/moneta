@@ -80,6 +80,20 @@ export async function fetchDay(date: string, book: LedgerBook = "PERSONAL"): Pro
   return r.json();
 }
 
+export async function fetchCalendarMarkers(
+  yearMonth: string,
+  book: LedgerBook = "PERSONAL"
+): Promise<string[]> {
+  const ts = Date.now();
+  const r = await fetch(
+    `/api/calendar-markers?yearMonth=${encodeURIComponent(yearMonth)}&${bookQuery(book)}&_ts=${ts}`,
+    NO_STORE_INIT
+  );
+  if (!r.ok) throw new Error(await r.text());
+  const data = (await r.json()) as { dates: string[] };
+  return data.dates ?? [];
+}
+
 export interface CreateTxBody {
   txDate: string;
   txType: TxType;

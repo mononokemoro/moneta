@@ -1,21 +1,50 @@
 import { useEffect, useState } from "react";
+import { fetchCalendarMarkers } from "../api/cashbook";
+import type { LedgerBook } from "../api/ledgerBook";
 import { daysInMonth, parseIso, toIsoDate } from "../util/dateUtil";
 
 type Props = {
   selected: string;
+  book: LedgerBook;
+  refreshKey?: number;
   onSelect: (iso: string) => void;
 };
 
-export function MiniCalendar({ selected, onSelect }: Props) {
+export function MiniCalendar({ selected, book, refreshKey = 0, onSelect }: Props) {
   const base = parseIso(selected);
   const [vy, setVy] = useState(base.getFullYear());
   const [vm, setVm] = useState(base.getMonth() + 1);
+  const [entryDays, setEntryDays] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     const d = parseIso(selected);
     setVy(d.getFullYear());
     setVm(d.getMonth() + 1);
   }, [selected]);
+
+  const yearMonth = `${vy}-${String(vm).padStart(2, "0")}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCalendarMarkers(yearMonth, book)
+      .then((dates) => {
+        if (cancelled) return;
+        const days = new Set<number>();
+        for (const iso of dates) {
+          const parsed = parseIso(iso);
+          if (parsed.getFullYear() === vy && parsed.getMonth() + 1 === vm) {
+            days.add(parsed.getDate());
+          }
+        }
+        setEntryDays(days);
+      })
+      .catch(() => {
+        if (!cancelled) setEntryDays(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [yearMonth, book, refreshKey]);
 
   const firstWeekday = new Date(vy, vm - 1, 1).getDay();
   const dim = daysInMonth(vy, vm);
@@ -59,14 +88,15 @@ export function MiniCalendar({ selected, onSelect }: Props) {
         {cells.map((cell, i) => {
           if (cell === null) return <span key={`e-${i}`} className="cb-cal__cell cb-cal__cell--empty" />;
           const active = selParts[0] === vy && selParts[1] === vm && selParts[2] === cell;
+          const hasEntry = entryDays.has(cell);
           return (
             <button
               key={cell}
               type="button"
-              className={`cb-cal__cell cb-cal__cell--day${active ? " is-active" : ""}`}
+              className={`cb-cal__cell cb-cal__cell--day${active ? " is-active" : ""}${hasEntry ? " has-entry" : ""}`}
               onClick={() => pick(cell)}
             >
-              {cell}
+              <span className="cb-cal__dayNum">{cell}</span>
             </button>
           );
         })}

@@ -285,6 +285,15 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
         f.setTxType(type);
 
+        f.setKind(
+                type == TxType.INCOME
+                        ? com.pininicong.cashbook.domain.FixedKind.INCOME
+                        : type == TxType.SAVINGS
+                                ? com.pininicong.cashbook.domain.FixedKind.SAVINGS
+                                : com.pininicong.cashbook.domain.FixedKind.EXPENSE);
+
+        f.setScheduleType(com.pininicong.cashbook.domain.FixedScheduleType.DAILY);
+
         f.setCategory(category);
 
         f.setCardName(cardName);

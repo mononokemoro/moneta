@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { fetchCategories, type CategoryList } from "../api/categories";
+import { clearCategoryCache, fetchCategories, type CategoryList } from "../api/categories";
 
 import type { LedgerBook } from "../api/ledgerBook";
 
-export function useCategories(book: LedgerBook) {
+export function useCategories(book: LedgerBook, refreshKey = 0) {
   const [categories, setCategories] = useState<CategoryList | null>(null);
 
   useEffect(() => {
+    if (refreshKey > 0) clearCategoryCache(book);
     fetchCategories(book)
       .then(setCategories)
       .catch(() => setCategories(null));
-  }, [book]);
+  }, [book, refreshKey]);
 
   return categories;
 }

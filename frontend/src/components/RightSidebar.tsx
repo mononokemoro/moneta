@@ -1,11 +1,13 @@
 import type { DayView } from "../api/cashbook";
 import { formatMoney } from "../formatMoney";
+import { formatVisitDate } from "../util/dateUtil";
 
-export type SidebarView = "cashbook" | "report" | "settings";
+export type SidebarView = "cashbook" | "report" | "data" | "settings";
 
 type Props = {
   view: SidebarView;
   onViewChange: (v: SidebarView) => void;
+  date: string;
   day: DayView | null;
 };
 
@@ -13,15 +15,34 @@ function sumPayment(p: { cash: number; creditCard: number; debitCard: number; ot
   return p.cash + p.creditCard + p.debitCard + p.otherCard;
 }
 
-export function RightSidebar({ view, onViewChange, day }: Props) {
+export function RightSidebar({ view, onViewChange, date, day }: Props) {
   const daily = day?.paymentSummary;
   const monthly = day?.monthlyPaymentSummary ?? daily;
   const cardMonthly =
     (monthly?.creditCard ?? 0) + (monthly?.debitCard ?? 0) + (monthly?.otherCard ?? 0);
   const monthTotal = monthly ? sumPayment(monthly) : 0;
+  const budget = day?.budget;
 
   return (
     <aside className="cb-side cb-side--right">
+      <div className="cb-profile">
+        <div className="cb-profile__avatar" aria-hidden />
+        <div className="cb-profile__txt">
+          <div className="cb-profile__name">미니가계부</div>
+          <div className="cb-profile__sub">
+            {budget ? (
+              <>
+                결산일 {budget.periodLabel}
+                <br />
+                방문일 {formatVisitDate(date)}
+              </>
+            ) : (
+              "Cashbook"
+            )}
+          </div>
+        </div>
+      </div>
+
       <button
         type="button"
         className={`cb-side__settings${view === "settings" ? " is-active" : ""}`}
@@ -29,10 +50,7 @@ export function RightSidebar({ view, onViewChange, day }: Props) {
         aria-current={view === "settings" ? "page" : undefined}
         onClick={() => onViewChange("settings")}
       >
-        <span className="cb-side__settingsIcon" aria-hidden>
-          ⚙
-        </span>
-        <span>설정</span>
+        설정
       </button>
 
       <nav className="cb-tabs" aria-label="보조 메뉴">
@@ -49,6 +67,13 @@ export function RightSidebar({ view, onViewChange, day }: Props) {
           onClick={() => onViewChange("report")}
         >
           보고서
+        </button>
+        <button
+          type="button"
+          className={view === "data" ? "cb-tab is-active" : "cb-tab"}
+          onClick={() => onViewChange("data")}
+        >
+          데이터
         </button>
       </nav>
 

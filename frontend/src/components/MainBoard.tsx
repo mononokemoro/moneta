@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { DayView } from "../api/cashbook";
-import { deleteTransaction, updateDailySheet } from "../api/cashbook";
+import { deleteTransaction } from "../api/cashbook";
 import { fetchCategoryKeywords, type CategoryKeyword } from "../api/categoryKeywords";
 import type { LedgerBook } from "../api/ledgerBook";
 import { addDays, formatDayTitle, toIsoDate } from "../util/dateUtil";
+import { confirmDelete } from "../util/confirmDialog";
 import { ExpenseTable } from "./ExpenseTable";
 import { SavingsTable } from "./SavingsTable";
+import { flattenSelectableCategoryNames } from "../api/categories";
 import { useCategories } from "./CategoryDatalist";
 
 type Props = {
@@ -14,11 +16,10 @@ type Props = {
   day: DayView | null;
   loading: boolean;
   error: string | null;
-  scheduleNote: string;
-  onScheduleChange: (v: string) => void;
   onDateChange: (iso: string) => void;
   onReload: () => Promise<void>;
   keywordRefresh?: number;
+  onUnsavedChange?: (dirty: boolean) => void;
 };
 
 export function MainBoard({
@@ -27,23 +28,23 @@ export function MainBoard({
   day,
   loading,
   error,
-  scheduleNote,
-  onScheduleChange,
   onDateChange,
   onReload,
   keywordRefresh = 0,
+  onUnsavedChange,
 }: Props) {
   const [selExp, setSelExp] = useState<Set<number>>(new Set());
   const [selInc, setSelInc] = useState<Set<number>>(new Set());
   const [selSav, setSelSav] = useState<Set<number>>(new Set());
-  const [dayMemo, setDayMemo] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [dirtyExp, setDirtyExp] = useState(false);
+  const [dirtyInc, setDirtyInc] = useState(false);
+  const [dirtySav, setDirtySav] = useState(false);
   const [busy, setBusy] = useState(false);
-  const categories = useCategories(book);
+  const categories = useCategories(book, keywordRefresh);
   const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
-  const expenseCats = categories?.expense.map((c) => c.name) ?? [];
-  const incomeCats = categories?.income.map((c) => c.name) ?? [];
-  const savingsTitles = categories?.savings.map((c) => c.name) ?? [];
+  const expenseGroups = categories?.expense ?? [];
+  const incomeGroups = categories?.income ?? [];
+  const savingsTitles = categories ? flattenSelectableCategoryNames(categories.savings) : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +66,11 @@ export function MainBoard({
     setSelSav(new Set());
   }, [date, book]);
 
+  const tablesDirty = dirtyExp || dirtyInc || dirtySav;
   useEffect(() => {
-    if (!day || day.date !== date) return;
-    onScheduleChange(day.scheduleNote ?? "");
-    setDayMemo(day.dayMemo ?? "");
-  }, [date, day?.date, onScheduleChange]);
+    onUnsavedChange?.(tablesDirty);
+    return () => onUnsavedChange?.(false);
+  }, [tablesDirty, onUnsavedChange]);
 
   function toggle(setter: React.Dispatch<React.SetStateAction<Set<number>>>, id: number, checked: boolean) {
     setter((prev) => {
@@ -83,18 +84,9 @@ export function MainBoard({
   const title = formatDayTitle(date);
   const selectedCount = selExp.size + selInc.size + selSav.size;
 
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await updateDailySheet(date, scheduleNote, dayMemo, book);
-      await onReload();
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleDeleteSelected() {
     if (selectedCount === 0) return;
+    if (!confirmDelete(selectedCount)) return;
     setBusy(true);
     try {
       for (const id of [...selExp, ...selInc, ...selSav]) {
@@ -128,8 +120,25 @@ export function MainBoard({
           <button type="button" className="cb-iconBtn" onClick={() => window.print()} aria-label="인쇄">
             🖨
           </button>
-          <button type="button" className="cb-btn cb-btn--primary" disabled={saving || !day} onClick={handleSave}>
-            {saving ? "저장 중…" : "저장"}
+          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
+            할부
+          </button>
+          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
+            이동
+          </button>
+          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
+            복사
+          </button>
+          <button
+            type="button"
+            className="cb-btn cb-btn--ghost"
+            disabled={busy || selectedCount === 0}
+            onClick={handleDeleteSelected}
+          >
+            삭제
+          </button>
+          <button type="button" className="cb-btn cb-btn--primary" disabled title="추후">
+            저장
           </button>
         </div>
       </header>
@@ -148,8 +157,9 @@ export function MainBoard({
             selected={selExp}
             onToggle={(id, c) => toggle(setSelExp, id, c)}
             onReload={onReload}
-            categoryOptions={expenseCats}
+            categoryGroups={expenseGroups}
             categoryKeywords={categoryKeywords}
+            onDirtyChange={setDirtyExp}
           />
           <ExpenseTable
             book={book}
@@ -160,8 +170,9 @@ export function MainBoard({
             selected={selInc}
             onToggle={(id, c) => toggle(setSelInc, id, c)}
             onReload={onReload}
-            categoryOptions={incomeCats}
+            categoryGroups={incomeGroups}
             categoryKeywords={categoryKeywords}
+            onDirtyChange={setDirtyInc}
           />
           <SavingsTable
             book={book}
@@ -171,41 +182,8 @@ export function MainBoard({
             onToggle={(id, c) => toggle(setSelSav, id, c)}
             onReload={onReload}
             titleOptions={savingsTitles}
+            onDirtyChange={setDirtySav}
           />
-
-          <div className="cb-bottom">
-            <div className="cb-bottom__toolbar">
-              <button
-                type="button"
-                className="cb-btn cb-btn--ghost"
-                disabled={busy || selectedCount === 0}
-                onClick={handleDeleteSelected}
-              >
-                삭제
-              </button>
-              <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
-                복사
-              </button>
-              <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
-                이동
-              </button>
-              <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
-                할부
-              </button>
-            </div>
-            <div className="cb-bottom__memo">
-              <textarea
-                className="cb-memo"
-                rows={3}
-                placeholder="오늘의 메모를 입력하세요. 메모와 가계부 입력사항은 함께 저장됩니다."
-                value={dayMemo}
-                onChange={(e) => setDayMemo(e.target.value)}
-              />
-              <button type="button" className="cb-btn cb-btn--primary" disabled={saving} onClick={handleSave}>
-                {saving ? "저장 중…" : "저장"}
-              </button>
-            </div>
-          </div>
         </>
       )}
     </main>

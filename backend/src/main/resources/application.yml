@@ -2,7 +2,7 @@
 # 다른 경로: SPRING_DATASOURCE_URL 또는 PININICONG_H2_FILE 로 재정의
 
 server:
-  port: 8080
+  port: 5174
 
 spring:
   application:

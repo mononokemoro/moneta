@@ -6,9 +6,9 @@
 
 | 목적 | 명령 | 접속 URL |
 |------|------|----------|
-| API만 | `backend` → `.\gradlew.bat bootRun` | http://localhost:8080 |
+| API만 | `backend` → `.\gradlew.bat bootRun` | http://localhost:5174 |
 | 개발 (UI + API) | 백엔드 + 여기서 `npm run dev` | http://localhost:5173 |
-| 배포용 단일 JAR | 프론트 `npm run build` → `backend` `bootJar` → `java -jar ...` | http://localhost:8080 |
+| 배포용 단일 JAR | 프론트 `npm run build` → `backend` `bootJar` → `java -jar ...` | http://localhost:5174 |
 
 **사전 요구:** JDK **21**, Node.js **18+**. H2 DB는 기본적으로 `%USERPROFILE%\.pininicong-cashbook\db` 에 생성됩니다. 워크스페이스 전체 설명은 루트 [`README.md`](../README.md) 를 참고하세요.
 
@@ -19,8 +19,8 @@ cd backend
 .\gradlew.bat bootRun
 ```
 
-- Health: http://localhost:8080/api/health
-- H2 콘솔: http://localhost:8080/h2-console
+- Health: http://localhost:5174/api/health
+- H2 콘솔: http://localhost:5174/h2-console
 
 ### 프론트 + 백엔드 (개발, 핫 리로드)
 
@@ -39,7 +39,7 @@ npm install
 npm run dev
 ```
 
-브라우저: http://localhost:5173 — Vite 가 `/api` 를 http://localhost:8080 으로 프록시합니다.
+브라우저: http://localhost:5173 — Vite 가 `/api` 를 http://localhost:5174 으로 프록시합니다.
 
 ### 단일 JAR (UI + API 한 포트)
 
@@ -55,7 +55,7 @@ cd ..\backend
 java -jar build\libs\pininicong-cashbook-0.0.1-SNAPSHOT.jar
 ```
 
-UI·API 모두 http://localhost:8080/ (`frontend/dist` 가 없으면 API 전용 JAR 만 생성됩니다).
+UI·API 모두 http://localhost:5174/ (`frontend/dist` 가 없으면 API 전용 JAR 만 생성됩니다).
 
 ## 스크립트
 
@@ -68,7 +68,7 @@ UI·API 모두 http://localhost:8080/ (`frontend/dist` 가 없으면 API 전용 
 
 ## API 프록시
 
-`vite.config.ts` 에서 `/api` 요청을 `http://localhost:8080` 으로 **프록시**하므로, 브라우저에서는 `fetch("/api/health")` 처럼 상대 경로로 호출하면 됩니다.
+`vite.config.ts` 에서 `/api` 요청을 `http://localhost:5174` 으로 **프록시**하므로, 브라우저에서는 `fetch("/api/health")` 처럼 상대 경로로 호출하면 됩니다.
 
 ## 소스 구조 (요약)
 

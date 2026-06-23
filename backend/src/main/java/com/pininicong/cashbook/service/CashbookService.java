@@ -12,6 +12,7 @@ import com.pininicong.cashbook.domain.MonthlyBudgetKey;
 import com.pininicong.cashbook.domain.TxType;
 import com.pininicong.cashbook.dto.BudgetDto;
 import com.pininicong.cashbook.dto.BudgetUpdateRequest;
+import com.pininicong.cashbook.dto.CalendarMarkersDto;
 import com.pininicong.cashbook.dto.CashBalanceUpdateRequest;
 import com.pininicong.cashbook.dto.CreatedTransactionDto;
 import com.pininicong.cashbook.dto.DailySheetUpdateRequest;
@@ -118,7 +119,11 @@ public class CashbookService {
                                     return s;
                                 });
 
-        List<CbFixedItem> fixedItems = fixedRepo.findByBookOrderBySortOrderAscIdAsc(ledger);
+        List<CbFixedItem> allFixed = fixedRepo.findByBookOrderBySortOrderAscIdAsc(ledger);
+        List<CbFixedItem> fixedItems =
+                allFixed.stream()
+                        .filter(f -> com.pininicong.cashbook.support.FixedScheduleUtil.matchesDate(f, date))
+                        .collect(Collectors.toList());
 
         return new DayViewDto(
                 ledger.name(),
@@ -134,7 +139,20 @@ public class CashbookService {
                 sheet.getDayMemo() != null ? sheet.getDayMemo() : "",
                 summarizePayments(exp),
                 summarizePayments(monthExp),
-                fixedItems.stream().map(CashbookService::toFixedItem).collect(Collectors.toList()));
+                fixedItems.stream().map(FixedItemService::toRow).collect(Collectors.toList()));
+    }
+
+    public CalendarMarkersDto getCalendarMarkers(LedgerBook book, YearMonth ym) {
+        LedgerBook ledger = bookOrDefault(book);
+        LocalDate monthStart = ym.atDay(1);
+        LocalDate monthEnd = ym.atEndOfMonth();
+        List<LocalDate> dates =
+                txRepo.findDistinctEntryDates(
+                        ledger,
+                        monthStart,
+                        monthEnd,
+                        List.of(TxType.EXPENSE, TxType.INCOME, TxType.SAVINGS));
+        return new CalendarMarkersDto(dates);
     }
 
     private static LedgerBook bookOrDefault(LedgerBook book) {
@@ -192,16 +210,6 @@ public class CashbookService {
                 n(t.getAmount()),
                 t.getAccumulatedAmount() != null ? t.getAccumulatedAmount() : ZERO,
                 t.getRemarks() != null ? t.getRemarks() : "");
-    }
-
-    private static FixedItemDto toFixedItem(CbFixedItem f) {
-        return new FixedItemDto(
-                f.getId(),
-                f.getTitle(),
-                n(f.getDefaultAmount()),
-                f.getCategory() != null ? f.getCategory() : "",
-                f.getCardName() != null ? f.getCardName() : "",
-                f.getTxType());
     }
 
     private static BigDecimal n(BigDecimal v) {

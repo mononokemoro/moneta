@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FixedItem } from "../api/cashbook";
 import { sendFixedItemsToCashbook } from "../api/cashbook";
 import type { LedgerBook } from "../api/ledgerBook";
-import { parseAmount } from "../util/parseAmount";
+import { amountToInput, formatAmountInput, parseAmount } from "../util/parseAmount";
 
 type ItemState = {
   checked: boolean;
@@ -15,9 +15,11 @@ type Props = {
   items: FixedItem[];
   disabled?: boolean;
   onReload: () => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
+  onOpenFixedSettings?: () => void;
 };
 
-export function FixedItemsCard({ book, txDate, items, disabled, onReload }: Props) {
+export function FixedItemsCard({ book, txDate, items, disabled, onReload, onDirtyChange, onOpenFixedSettings }: Props) {
   const [state, setState] = useState<Record<number, ItemState>>({});
   const [busy, setBusy] = useState(false);
 
@@ -26,11 +28,16 @@ export function FixedItemsCard({ book, txDate, items, disabled, onReload }: Prop
     for (const item of items) {
       next[item.id] = {
         checked: false,
-        amount: item.defaultAmount ? String(item.defaultAmount) : "",
+        amount: item.defaultAmount ? amountToInput(item.defaultAmount) : "",
       };
     }
     setState(next);
   }, [items, txDate]);
+
+  const hasChecked = items.some((item) => state[item.id]?.checked);
+  useEffect(() => {
+    onDirtyChange?.(hasChecked);
+  }, [hasChecked, onDirtyChange]);
 
   function patch(id: number, patch: Partial<ItemState>) {
     setState((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -67,34 +74,40 @@ export function FixedItemsCard({ book, txDate, items, disabled, onReload }: Prop
 
   return (
     <section className="cb-card cb-card--fixed">
-      <h3 className="cb-card__title">오늘의 고정</h3>
+      <h3 className="cb-card__title cb-card__title--link">
+        <button type="button" className="cb-card__titleBtn" onClick={onOpenFixedSettings}>
+          오늘의 고정
+        </button>
+      </h3>
       {items.length === 0 ? (
-        <p className="cb-muted">등록된 고정 항목이 없습니다.</p>
+        <p className="cb-muted">오늘 해당하는 고정 항목이 없습니다.</p>
       ) : (
-        <ul className="cb-fixedlist">
-          {items.map((item) => {
-            const s = state[item.id] ?? { checked: false, amount: "" };
-            return (
-              <li key={item.id} className="cb-fixedlist__row">
-                <input
-                  type="checkbox"
-                  checked={s.checked}
-                  onChange={(e) => patch(item.id, { checked: e.target.checked })}
-                  disabled={disabled || busy}
-                />
-                <span className="cb-fixedlist__title" title={item.category}>
-                  {item.title}
-                </span>
-                <input
-                  className="cb-fixedlist__amount cb-num"
-                  value={s.amount}
-                  onChange={(e) => patch(item.id, { amount: e.target.value })}
-                  disabled={disabled || busy}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <div className="cb-fixedlist-scroll">
+          <ul className="cb-fixedlist">
+            {items.map((item) => {
+              const s = state[item.id] ?? { checked: false, amount: "" };
+              return (
+                <li key={item.id} className="cb-fixedlist__row">
+                  <input
+                    type="checkbox"
+                    checked={s.checked}
+                    onChange={(e) => patch(item.id, { checked: e.target.checked })}
+                    disabled={disabled || busy}
+                  />
+                  <span className="cb-fixedlist__title" title={item.category}>
+                    {item.title}
+                  </span>
+                  <input
+                    className="cb-fixedlist__amount cb-num"
+                    value={s.amount}
+                    onChange={(e) => patch(item.id, { amount: formatAmountInput(e.target.value) })}
+                    disabled={disabled || busy}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       <button
         type="button"

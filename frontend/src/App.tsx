@@ -3,34 +3,78 @@ import "./App.css";
 import "./cashbook.css";
 import "./report.css";
 import "./settings.css";
+import "./data.css";
 import { fetchDay, type DayView } from "./api/cashbook";
 import { loadLedgerBook, saveLedgerBook, type LedgerBook } from "./api/ledgerBook";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { MainBoard } from "./components/MainBoard";
 import { ReportView } from "./components/ReportView";
-import { SettingsView } from "./components/SettingsView";
+import { DataView } from "./components/DataView";
+import { SettingsView, type SettingsSection } from "./components/SettingsView";
 import { RightSidebar, type SidebarView } from "./components/RightSidebar";
 import { toIsoDate } from "./util/dateUtil";
+import { confirmLeaveUnsaved } from "./util/confirmDialog";
 
 export default function App() {
   const [view, setView] = useState<SidebarView>("cashbook");
   const [book, setBook] = useState<LedgerBook>(() => loadLedgerBook());
   const [date, setDate] = useState(() => toIsoDate(new Date()));
   const [day, setDay] = useState<DayView | null>(null);
-  const [scheduleNote, setScheduleNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [keywordRefresh, setKeywordRefresh] = useState(0);
+  const [calendarRefresh, setCalendarRefresh] = useState(0);
+  const [tablesUnsaved, setTablesUnsaved] = useState(false);
+  const [sidebarUnsaved, setSidebarUnsaved] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("categories");
+  const hasUnsaved = tablesUnsaved || sidebarUnsaved;
 
   const handleBookChange = useCallback((next: LedgerBook) => {
     setBook(next);
     saveLedgerBook(next);
   }, []);
 
+  const tryDateChange = useCallback(
+    (next: string) => {
+      if (next === date) return;
+      if (hasUnsaved && !confirmLeaveUnsaved()) return;
+      setDate(next);
+    },
+    [date, hasUnsaved],
+  );
+
+  const openSettings = useCallback(
+    (section: SettingsSection = "categories") => {
+      if (view === "cashbook" && hasUnsaved && !confirmLeaveUnsaved()) return;
+      setSettingsSection(section);
+      setView("settings");
+    },
+    [view, hasUnsaved],
+  );
+
+  const tryViewChange = useCallback(
+    (next: SidebarView) => {
+      if (next === view) return;
+      if (view === "cashbook" && hasUnsaved && !confirmLeaveUnsaved()) return;
+      setView(next);
+    },
+    [view, hasUnsaved],
+  );
+
+  const tryBookChange = useCallback(
+    (next: LedgerBook) => {
+      if (next === book) return;
+      if (hasUnsaved && !confirmLeaveUnsaved()) return;
+      handleBookChange(next);
+    },
+    [book, hasUnsaved, handleBookChange],
+  );
+
   const reload = useCallback(async () => {
     const d = await fetchDay(date, book);
     setDay(d);
     setErr(null);
+    setCalendarRefresh((n) => n + 1);
   }, [date, book]);
 
   useEffect(() => {
@@ -65,13 +109,14 @@ export default function App() {
         <div className="cb-cashbook-layout">
           <LeftSidebar
             book={book}
-            onBookChange={handleBookChange}
+            onBookChange={tryBookChange}
             date={date}
             day={day}
-            scheduleNote={scheduleNote}
-            onScheduleChange={setScheduleNote}
-            onSelectDate={setDate}
+            onSelectDate={tryDateChange}
             onReload={reload}
+            calendarRefresh={calendarRefresh}
+            onDirtyChange={setSidebarUnsaved}
+            onOpenFixedSettings={() => openSettings("fixed")}
           />
           <MainBoard
             book={book}
@@ -79,25 +124,35 @@ export default function App() {
             day={day}
             loading={loading}
             error={err}
-            scheduleNote={scheduleNote}
-            onScheduleChange={setScheduleNote}
-            onDateChange={setDate}
+            onDateChange={tryDateChange}
             onReload={reload}
             keywordRefresh={keywordRefresh}
+            onUnsavedChange={setTablesUnsaved}
           />
-          <RightSidebar view={view} onViewChange={setView} day={day} />
+          <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
         </div>
       )}
       {view === "report" && (
         <div className="cb-report-layout">
           <ReportView book={book} onBookChange={handleBookChange} />
-          <RightSidebar view={view} onViewChange={setView} day={day} />
+          <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
+        </div>
+      )}
+      {view === "data" && (
+        <div className="cb-data-layout">
+          <DataView />
+          <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
         </div>
       )}
       {view === "settings" && (
         <div className="cb-settings-layout">
-          <SettingsView book={book} onBookChange={handleBookChange} />
-          <RightSidebar view={view} onViewChange={setView} day={day} />
+          <SettingsView
+            book={book}
+            onBookChange={handleBookChange}
+            section={settingsSection}
+            onSectionChange={setSettingsSection}
+          />
+          <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
         </div>
       )}
     </div>
