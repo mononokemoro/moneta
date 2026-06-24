@@ -2,12 +2,14 @@ import { Fragment, useEffect, useState } from "react";
 import {
   createCategory,
   deleteCategory,
+  fetchCategoryTransactions,
   reorderCategories,
   saveCategoryPreferences,
   updateCategory,
   type CategoryGroup,
   type CategoryItem,
   type CategoryList,
+  type CategoryTransactionsResponse,
   type CategoryType,
 } from "../api/categories";
 import type { LedgerBook } from "../api/ledgerBook";
@@ -35,6 +37,7 @@ import {
   type EditableGroup,
 } from "../util/categoryEditTree";
 import { MonetaHint } from "./MonetaPanel";
+import { CategoryTransactionsDialog } from "./CategoryTransactionsDialog";
 import { SettingsSectionToolbar } from "./SettingsSectionToolbar";
 
 type Props = {
@@ -88,6 +91,7 @@ function CategoryTreeColumn({
   onDeleteSelected,
   onMoveMajor,
   onRelocateMinor,
+  onViewTransactions,
 }: {
   title: string;
   tone: "income" | "expense";
@@ -111,6 +115,7 @@ function CategoryTreeColumn({
     toMajorKey: string,
     beforeKey: string | null
   ) => void;
+  onViewTransactions: (categoryId: number, categoryName: string) => void;
 }) {
   const [dragMeta, setDragMeta] = useState<DragMeta | null>(null);
   const [dropKey, setDropKey] = useState<string | null>(null);
@@ -265,6 +270,25 @@ function CategoryTreeColumn({
     );
   }
 
+  function renderViewButton(categoryId: number | null, categoryName: string) {
+    if (categoryId == null) return null;
+    return (
+      <button
+        type="button"
+        className="cb-catmgmt__viewBtn"
+        title="등록 내역 조회"
+        aria-label={`${categoryName || "분류"} 내역 조회`}
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onViewTransactions(categoryId, categoryName);
+        }}
+      >
+        내역
+      </button>
+    );
+  }
+
   function renderCheckCell(key: string) {
     if (!isDeletableNode(groups, key)) return null;
     return (
@@ -340,6 +364,7 @@ function CategoryTreeColumn({
                     <td className="cb-catmgmt__treeCell" onClick={(e) => e.stopPropagation()}>
                       {renderMajorItem(group.key, group.name, expanded)}
                     </td>
+                    <td className="cb-catmgmt__actionCell" onClick={(e) => e.stopPropagation()} />
                   </tr>
                   {expanded
                     ? group.children.map((child, idx) => {
@@ -369,6 +394,9 @@ function CategoryTreeColumn({
                             <td className="cb-catmgmt__treeCell">
                               {renderMinorItem(child.key, child.name, linePos)}
                             </td>
+                            <td className="cb-catmgmt__actionCell">
+                              {renderViewButton(child.id, child.name)}
+                            </td>
                           </tr>
                         );
                       })
@@ -385,6 +413,7 @@ function CategoryTreeColumn({
                           </span>
                         </div>
                       </td>
+                      <td className="cb-catmgmt__actionCell" />
                     </tr>
                   ) : null}
                 </Fragment>
@@ -410,6 +439,11 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
   const [activeIncomeMajorKey, setActiveIncomeMajorKey] = useState<string | null>(null);
   const [activeExpenseMajorKey, setActiveExpenseMajorKey] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [txDialogOpen, setTxDialogOpen] = useState(false);
+  const [txDialogCategoryId, setTxDialogCategoryId] = useState<number | null>(null);
+  const [txDialogBusy, setTxDialogBusy] = useState(false);
+  const [txDialogError, setTxDialogError] = useState<string | null>(null);
+  const [txDialogData, setTxDialogData] = useState<CategoryTransactionsResponse | null>(null);
 
   const incomeGroups = categories.income;
   const expenseGroups = categories.expense;
@@ -657,12 +691,43 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
 
   const treeDirty = hasTreeChanges(incomeEdit) || hasTreeChanges(expenseEdit);
 
+  function closeTxDialog() {
+    if (txDialogBusy) return;
+    setTxDialogOpen(false);
+    setTxDialogCategoryId(null);
+    setTxDialogData(null);
+    setTxDialogError(null);
+  }
+
+  async function reloadTxDialog() {
+    if (txDialogCategoryId == null) return;
+    const data = await fetchCategoryTransactions(txDialogCategoryId, book);
+    setTxDialogData(data);
+  }
+
+  async function openCategoryTransactions(categoryId: number, _categoryName: string) {
+    setTxDialogCategoryId(categoryId);
+    setTxDialogOpen(true);
+    setTxDialogBusy(true);
+    setTxDialogError(null);
+    setTxDialogData(null);
+    try {
+      const data = await fetchCategoryTransactions(categoryId, book);
+      setTxDialogData(data);
+    } catch (e: unknown) {
+      setTxDialogError(e instanceof Error ? e.message : "내역 조회 실패");
+    } finally {
+      setTxDialogBusy(false);
+    }
+  }
+
   function renderHint() {
     if (mainTab === "add-delete") {
       return (
         <MonetaHint>
           ▶로 소분류를 펼치고 이름을 입력한 뒤 저장하세요. ⠿ 아이콘을 드래그하면 순서를 변경하거나 다른
-          대분류로 이동할 수 있습니다. 내역에 사용 중인 분류는 삭제할 수 없습니다.
+          대분류로 이동할 수 있습니다. 대분류는 소분류가 없을 때, 소분류는 거래 내역이 없을 때 삭제할 수
+          있습니다.
         </MonetaHint>
       );
     }
@@ -696,6 +761,7 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
             onRelocateMinor={(fromMajorKey, dragKey, toMajorKey, beforeKey) =>
               void relocateMinorInTree("INCOME", fromMajorKey, dragKey, toMajorKey, beforeKey)
             }
+            onViewTransactions={openCategoryTransactions}
           />
         </div>
         <div className="cb-catmgmt__dualCol">
@@ -719,6 +785,7 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
             onRelocateMinor={(fromMajorKey, dragKey, toMajorKey, beforeKey) =>
               void relocateMinorInTree("EXPENSE", fromMajorKey, dragKey, toMajorKey, beforeKey)
             }
+            onViewTransactions={openCategoryTransactions}
           />
         </div>
       </div>
@@ -810,7 +877,7 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
               저장
             </button>
             <button type="button" className="cb-btn cb-btn--secondary" onClick={handleResetSelection}>
-              {mainTab === "add-delete" ? "변경 취소" : "선택 초기화"}
+              취소
             </button>
           </>
         }
@@ -820,6 +887,16 @@ export function CategoryManagementPanel({ book, categories, onReload }: Props) {
       {err && <p className="cb-err cb-settings__err">{err}</p>}
 
       <div className="cb-settings__content">{renderBody()}</div>
+
+      <CategoryTransactionsDialog
+        open={txDialogOpen}
+        book={book}
+        busy={txDialogBusy}
+        error={txDialogError}
+        data={txDialogData}
+        onClose={closeTxDialog}
+        onSaved={reloadTxDialog}
+      />
     </div>
   );
 }

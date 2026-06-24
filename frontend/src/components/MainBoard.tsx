@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import type { DayView } from "../api/cashbook";
-import { deleteTransaction } from "../api/cashbook";
+import { deleteTransaction, fetchDayTransactionTable, moveTransactions } from "../api/cashbook";
 import { fetchCategoryKeywords, type CategoryKeyword } from "../api/categoryKeywords";
 import type { LedgerBook } from "../api/ledgerBook";
+import type { TransactionTablePreview } from "../api/transactionTable";
 import { addDays, formatDayTitle, toIsoDate } from "../util/dateUtil";
 import { confirmDelete } from "../util/confirmDialog";
 import { ExpenseTable } from "./ExpenseTable";
 import { SavingsTable } from "./SavingsTable";
-import { flattenSelectableCategoryNames } from "../api/categories";
+import { flattenSelectableCategoryNames, selectableCategoryGroups } from "../api/categories";
 import { useCategories } from "./CategoryDatalist";
+import { TransactionMoveDialog } from "./TransactionMoveDialog";
+import { TransactionTablePreviewDialog } from "./TransactionTablePreviewDialog";
 
 type Props = {
   book: LedgerBook;
@@ -40,11 +43,25 @@ export function MainBoard({
   const [dirtyInc, setDirtyInc] = useState(false);
   const [dirtySav, setDirtySav] = useState(false);
   const [busy, setBusy] = useState(false);
-  const categories = useCategories(book, keywordRefresh);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
+  const [tablePreviewOpen, setTablePreviewOpen] = useState(false);
+  const [tablePreview, setTablePreview] = useState<TransactionTablePreview | null>(null);
+  const [tablePreviewBusy, setTablePreviewBusy] = useState(false);
+  const [tablePreviewErr, setTablePreviewErr] = useState<string | null>(null);
+  const personalCategoryList = useCategories("PERSONAL", keywordRefresh);
+  const householdCategoryList = useCategories("HOUSEHOLD", keywordRefresh);
   const [categoryKeywords, setCategoryKeywords] = useState<CategoryKeyword[]>([]);
-  const expenseGroups = categories?.expense ?? [];
-  const incomeGroups = categories?.income ?? [];
-  const savingsTitles = categories ? flattenSelectableCategoryNames(categories.savings) : [];
+  const personalExpenseGroups = selectableCategoryGroups(personalCategoryList?.expense ?? []);
+  const householdExpenseGroups = selectableCategoryGroups(householdCategoryList?.expense ?? []);
+  const expenseGroups =
+    book === "PERSONAL" ? personalExpenseGroups : householdExpenseGroups;
+  const incomeGroups = selectableCategoryGroups(
+    (book === "PERSONAL" ? personalCategoryList : householdCategoryList)?.income ?? [],
+  );
+  const savingsTitles = flattenSelectableCategoryNames(
+    (book === "PERSONAL" ? personalCategoryList : householdCategoryList)?.savings ?? [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +81,9 @@ export function MainBoard({
     setSelExp(new Set());
     setSelInc(new Set());
     setSelSav(new Set());
+    setTablePreviewOpen(false);
+    setTablePreview(null);
+    setTablePreviewErr(null);
   }, [date, book]);
 
   const tablesDirty = dirtyExp || dirtyInc || dirtySav;
@@ -98,6 +118,54 @@ export function MainBoard({
     }
   }
 
+  function openMoveDialog() {
+    if (selectedCount === 0) return;
+    setMoveError(null);
+    setMoveOpen(true);
+  }
+
+  async function handleMoveConfirm(targetDate: string) {
+    if (selectedCount === 0) return;
+    setBusy(true);
+    setMoveError(null);
+    try {
+      await moveTransactions([...selExp, ...selInc, ...selSav], targetDate, book);
+      setMoveOpen(false);
+      setSelExp(new Set());
+      setSelInc(new Set());
+      setSelSav(new Set());
+      await onReload();
+    } catch (e) {
+      setMoveError(e instanceof Error ? e.message : "이동 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openTablePreview() {
+    setTablePreviewOpen(true);
+    setTablePreviewBusy(true);
+    setTablePreviewErr(null);
+    try {
+      const table = await fetchDayTransactionTable(date, book);
+      setTablePreview({
+        tableName: table.tableName,
+        title: table.bookLabel,
+        txDate: table.txDate,
+        subtitle: `${table.count}건 · 당일 가계부와 동일 집합`,
+        count: table.count,
+        querySql: table.querySql,
+        groupByTxType: true,
+        rows: table.rows,
+      });
+    } catch (e: unknown) {
+      setTablePreviewErr(e instanceof Error ? e.message : "테이블 조회 실패");
+      setTablePreview(null);
+    } finally {
+      setTablePreviewBusy(false);
+    }
+  }
+
   return (
     <main className="cb-main">
       <header className="cb-main__hdr">
@@ -117,17 +185,21 @@ export function MainBoard({
           <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
             엑셀 ▼
           </button>
-          <button type="button" className="cb-iconBtn" onClick={() => window.print()} aria-label="인쇄">
-            🖨
+          <button
+            type="button"
+            className="cb-btn cb-btn--ghost"
+            disabled={busy || loading || tablePreviewBusy}
+            onClick={() => void openTablePreview()}
+          >
+            {tablePreviewBusy ? "조회 중…" : "테이블 조회"}
           </button>
-          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
-            할부
-          </button>
-          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
+          <button
+            type="button"
+            className="cb-btn cb-btn--ghost"
+            disabled={busy || selectedCount === 0}
+            onClick={openMoveDialog}
+          >
             이동
-          </button>
-          <button type="button" className="cb-btn cb-btn--ghost" disabled title="추후">
-            복사
           </button>
           <button
             type="button"
@@ -137,11 +209,30 @@ export function MainBoard({
           >
             삭제
           </button>
-          <button type="button" className="cb-btn cb-btn--primary" disabled title="추후">
-            저장
-          </button>
         </div>
       </header>
+
+      <TransactionMoveDialog
+        open={moveOpen}
+        count={selectedCount}
+        currentDate={date}
+        initialDate={date}
+        busy={busy}
+        error={moveError}
+        onClose={() => !busy && setMoveOpen(false)}
+        onConfirm={(targetDate) => void handleMoveConfirm(targetDate)}
+      />
+
+      <TransactionTablePreviewDialog
+        open={tablePreviewOpen}
+        data={tablePreview}
+        busy={tablePreviewBusy}
+        error={tablePreviewErr}
+        onClose={() => {
+          setTablePreviewOpen(false);
+          setTablePreview(null);
+        }}
+      />
 
       {loading && <p className="cb-muted">불러오는 중…</p>}
       {error && <p className="cb-err">{error}</p>}
@@ -158,6 +249,7 @@ export function MainBoard({
             onToggle={(id, c) => toggle(setSelExp, id, c)}
             onReload={onReload}
             categoryGroups={expenseGroups}
+            householdCategoryGroups={book === "PERSONAL" ? householdExpenseGroups : undefined}
             categoryKeywords={categoryKeywords}
             onDirtyChange={setDirtyExp}
           />

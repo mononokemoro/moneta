@@ -15,7 +15,7 @@ import org.hibernate.annotations.ColumnDefault;
 @Table(
         name = "cb_category",
         uniqueConstraints =
-                @UniqueConstraint(columnNames = {"book", "category_type", "name", "tier"}))
+                @UniqueConstraint(columnNames = {"book", "category_type", "name", "tier", "parent_id"}))
 public class CbCategory {
 
     public enum CategoryType {

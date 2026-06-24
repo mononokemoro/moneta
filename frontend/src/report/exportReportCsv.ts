@@ -1,5 +1,6 @@
 import type { ReportData } from "../api/report";
 import { formatMoney } from "../formatMoney";
+import { formatDisplayDate } from "../util/dateUtil";
 
 function csvCell(v: string | number): string {
   const s = String(v);
@@ -27,7 +28,7 @@ export function downloadReportCsv(data: ReportData): void {
     lines.push(["일자", "구분", "항목", "분류", "카드명", "금액", "비고"].map(csvCell).join(","));
     for (const d of data.details) {
       lines.push(
-        [d.date, d.txType, d.title, d.category, d.cardName, formatMoney(d.amount), d.remarks]
+        [formatDisplayDate(d.date), d.txType, d.title, d.category, d.cardName, formatMoney(d.amount), d.remarks]
           .map(csvCell)
           .join(",")
       );
@@ -36,7 +37,7 @@ export function downloadReportCsv(data: ReportData): void {
     lines.push(["일자", "합계", "현금", "카드"].map(csvCell).join(","));
     for (const d of data.calendarDays) {
       lines.push(
-        [d.date, formatMoney(d.total), formatMoney(d.cash), formatMoney(d.card)]
+        [formatDisplayDate(d.date), formatMoney(d.total), formatMoney(d.cash), formatMoney(d.card)]
           .map(csvCell)
           .join(",")
       );

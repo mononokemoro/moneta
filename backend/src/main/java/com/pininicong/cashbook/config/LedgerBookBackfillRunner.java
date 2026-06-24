@@ -26,6 +26,7 @@ public class LedgerBookBackfillRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureBookColumn("cb_transaction");
+        ensureHouseholdCategoryColumn();
         ensureBookColumn("cb_category");
         ensureBookColumn("cb_fixed_item");
         ensureBookColumn("cb_monthly_budget");
@@ -105,6 +106,15 @@ public class LedgerBookBackfillRunner implements ApplicationRunner {
         jdbc.update(
                 "UPDATE " + table + " SET book = ? WHERE book IS NULL", LedgerBook.PERSONAL.name());
         log.info("{}.book 컬럼 추가 및 PERSONAL 백필", table);
+    }
+
+    private void ensureHouseholdCategoryColumn() {
+        if (!tableExists("cb_transaction") || columnExists("cb_transaction", "household_category")) {
+            return;
+        }
+        jdbc.execute("ALTER TABLE cb_transaction ADD COLUMN household_category VARCHAR(80)");
+        jdbc.update("UPDATE cb_transaction SET household_category = '' WHERE household_category IS NULL");
+        log.info("cb_transaction.household_category 컬럼 추가");
     }
 
     private void backfillColumn(String table, String column) {

@@ -298,16 +298,34 @@ export function isDeletableNode(groups: EditableGroup[], key: string): boolean {
   for (const g of groups) {
     if (g.key === key) {
       if (g.isNew) return true;
-      return g.userCreated && !g.inUse;
+      const visibleChildren = g.children.filter((c) => !c.markedDelete);
+      return visibleChildren.length === 0;
     }
     for (const c of g.children) {
       if (c.key === key) {
         if (c.isNew) return true;
-        return c.userCreated && !c.inUse;
+        return !c.inUse;
       }
     }
   }
   return false;
+}
+
+export function findNodeByKey(
+  groups: EditableGroup[],
+  key: string
+): { id: number | null; name: string; tier: "MAJOR" | "MINOR" } | null {
+  for (const g of groups) {
+    if (g.key === key) {
+      return { id: g.id, name: g.name, tier: "MAJOR" };
+    }
+    for (const c of g.children) {
+      if (c.key === key) {
+        return { id: c.id, name: c.name, tier: "MINOR" };
+      }
+    }
+  }
+  return null;
 }
 
 export function isEditableName(groups: EditableGroup[], key: string): boolean {

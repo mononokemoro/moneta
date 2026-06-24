@@ -3,7 +3,7 @@ package com.pininicong.cashbook.config;
 
 
 import com.pininicong.cashbook.domain.CbCashBalance;
-
+import com.pininicong.cashbook.domain.CbCategory.CategoryType;
 import com.pininicong.cashbook.domain.CbFixedItem;
 
 import com.pininicong.cashbook.domain.CbMonthlyBudget;
@@ -25,6 +25,8 @@ import com.pininicong.cashbook.repo.CbMonthlyBudgetRepository;
 import com.pininicong.cashbook.repo.CbTransactionRepository;
 
 import com.pininicong.cashbook.service.MonetaImportService;
+import com.pininicong.cashbook.service.TransactionCardSupport;
+import com.pininicong.cashbook.service.TransactionCategorySupport;
 
 import java.math.BigDecimal;
 
@@ -65,6 +67,10 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
     private final MonetaImportService importService;
 
+    private final TransactionCategorySupport categorySupport;
+
+    private final TransactionCardSupport cardSupport;
+
 
 
     public CashbookDataInitializer(
@@ -79,7 +85,11 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
             CbCategoryRepository categoryRepo,
 
-            MonetaImportService importService) {
+            MonetaImportService importService,
+
+            TransactionCategorySupport categorySupport,
+
+            TransactionCardSupport cardSupport) {
 
         this.cashRepo = cashRepo;
 
@@ -92,6 +102,10 @@ public class CashbookDataInitializer implements ApplicationRunner {
         this.categoryRepo = categoryRepo;
 
         this.importService = importService;
+
+        this.categorySupport = categorySupport;
+
+        this.cardSupport = cardSupport;
 
     }
 
@@ -153,11 +167,11 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
         LocalDate today = LocalDate.now();
 
-        seed(txRepo, today, TxType.EXPENSE, "점심 식비", new BigDecimal("12000"), "식비", "", "");
+        seed(today, TxType.EXPENSE, "점심 식비", new BigDecimal("12000"), "식비", "", "");
 
-        seed(txRepo, today, TxType.INCOME, "이자 수입", new BigDecimal("350"), "수입", "", "");
+        seed(today, TxType.INCOME, "이자 수입", new BigDecimal("350"), "수입", "", "");
 
-        seedSavings(txRepo, today, "적금 불입", new BigDecimal("300000"), new BigDecimal("3600000"), "청년 적금");
+        seedSavings(today, "적금 불입", new BigDecimal("300000"), new BigDecimal("3600000"), "청년 적금");
 
     }
 
@@ -177,9 +191,7 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
 
 
-    private static void seed(
-
-            CbTransactionRepository repo,
+    private void seed(
 
             LocalDate date,
 
@@ -207,23 +219,31 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
         t.setAmount(amount);
 
-        t.setCategory(category);
+        categorySupport
+                .resolveMinor(
+                        SEED_BOOK,
+                        com.pininicong.cashbook.service.TransactionCategorySupport.categoryTypeFor(type),
+                        null,
+                        category)
+                .ifPresent(resolved -> t.setCategoryId(resolved.id()));
 
-        t.setCardName(cardName);
+        t.setCardProductId(
+                cardSupport
+                        .resolveCard(SEED_BOOK, null, cardName)
+                        .map(TransactionCardSupport.ResolvedCard::id)
+                        .orElse(null));
 
         t.setRemarks(remarks);
 
         t.setSortOrder(0);
 
-        repo.save(t);
+        txRepo.save(t);
 
     }
 
 
 
-    private static void seedSavings(
-
-            CbTransactionRepository repo,
+    private void seedSavings(
 
             LocalDate date,
 
@@ -247,9 +267,11 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
         t.setAmount(amount);
 
-        t.setCategory("저축");
+        categorySupport
+                .resolveMinor(SEED_BOOK, CategoryType.SAVINGS, null, "저축")
+                .ifPresent(resolved -> t.setCategoryId(resolved.id()));
 
-        t.setCardName("");
+        t.setCardProductId(null);
 
         t.setRemarks(remarks);
 
@@ -257,7 +279,7 @@ public class CashbookDataInitializer implements ApplicationRunner {
 
         t.setSortOrder(0);
 
-        repo.save(t);
+        txRepo.save(t);
 
     }
 

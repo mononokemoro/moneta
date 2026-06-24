@@ -95,6 +95,14 @@ public class CbFinancialProduct {
     @Column(name = "card_limit", length = 24)
     private String cardLimit = "";
 
+    /** 저축/보험: 개설(기준) 잔액 */
+    @Column(name = "opening_balance", precision = 19, scale = 2)
+    private java.math.BigDecimal openingBalance = java.math.BigDecimal.ZERO;
+
+    /** 개설(기준) 잔액 적용 시작일 */
+    @Column(name = "opening_date")
+    private java.time.LocalDate openingDate;
+
     public Long getId() {
         return id;
     }
@@ -257,5 +265,21 @@ public class CbFinancialProduct {
 
     public void setCardLimit(String cardLimit) {
         this.cardLimit = cardLimit != null ? cardLimit : "";
+    }
+
+    public java.math.BigDecimal getOpeningBalance() {
+        return openingBalance;
+    }
+
+    public void setOpeningBalance(java.math.BigDecimal openingBalance) {
+        this.openingBalance = openingBalance != null ? openingBalance : java.math.BigDecimal.ZERO;
+    }
+
+    public java.time.LocalDate getOpeningDate() {
+        return openingDate;
+    }
+
+    public void setOpeningDate(java.time.LocalDate openingDate) {
+        this.openingDate = openingDate;
     }
 }

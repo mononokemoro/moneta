@@ -67,16 +67,13 @@ public class FinancialProductService {
             seedFromCategories(ledger);
         }
 
-        List<String> cardNames = txRepo.findDistinctCardNames(ledger, TxType.EXPENSE);
+        List<Long> cardProductIds = txRepo.findDistinctCardProductIds(ledger, TxType.EXPENSE);
         List<CbFinancialProduct> existingCards =
                 productRepo.findByBookAndProductTypeOrderBySortOrderAscIdAsc(
                         ledger, ProductType.CARD);
-        Set<String> known = new HashSet<>();
+        Set<Long> known = new HashSet<>();
         for (CbFinancialProduct card : existingCards) {
-            String name = normalizeName(card.getName());
-            if (!name.isEmpty()) {
-                known.add(name);
-            }
+            known.add(card.getId());
         }
 
         int order =
@@ -86,9 +83,12 @@ public class FinancialProductService {
                         .orElse(-1)
                         + 1;
         int added = 0;
-        for (String raw : cardNames) {
-            String name = normalizeName(raw);
-            if (name.isEmpty() || known.contains(name)) {
+        for (Long cardProductId : cardProductIds) {
+            if (cardProductId == null || known.contains(cardProductId)) {
+                continue;
+            }
+            String name = productRepo.findById(cardProductId).map(CbFinancialProduct::getName).orElse("");
+            if (name.isEmpty()) {
                 continue;
             }
             CbFinancialProduct row = new CbFinancialProduct();
@@ -104,22 +104,26 @@ public class FinancialProductService {
             row.setPeriodEndMonth("전월");
             row.setPeriodEndDay("31");
             productRepo.save(row);
-            known.add(name);
+            known.add(cardProductId);
             added++;
         }
 
         return new CardSyncFromTransactionsResponse(added, list(ledger));
     }
 
-    private static String normalizeName(String raw) {
-        return raw != null ? raw.trim() : "";
-    }
-
     private int saveType(
             LedgerBook ledger, ProductType type, List<FinancialProductDto> items, int startOrder) {
         int order = startOrder;
         for (FinancialProductDto dto : items) {
-            CbFinancialProduct row = new CbFinancialProduct();
+            CbFinancialProduct row;
+            if (dto.id() != null) {
+                row =
+                        productRepo
+                                .findByIdAndBook(dto.id(), ledger)
+                                .orElseGet(CbFinancialProduct::new);
+            } else {
+                row = new CbFinancialProduct();
+            }
             row.setBook(ledger);
             row.setProductType(type);
             row.setStatus(dto.status() != null ? dto.status() : ProductStatus.ACTIVE);
@@ -196,6 +200,39 @@ public class FinancialProductService {
         row.setPeriodEndDay(dto.periodEndDay());
         row.setPrincipal(dto.principal());
         row.setCardLimit(dto.cardLimit());
+        row.setOpeningBalance(dto.openingBalance() != null ? dto.openingBalance() : java.math.BigDecimal.ZERO);
+        row.setOpeningDate(parseOpeningDate(dto.openingDate()));
+    }
+
+    private static java.time.LocalDate parseOpeningDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String digits = raw.replaceAll("\\D", "");
+        if (digits.length() == 8) {
+            return java.time.LocalDate.parse(
+                    digits,
+                    java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        }
+        if (digits.length() == 6) {
+            int yy = Integer.parseInt(digits.substring(0, 2));
+            int year = yy >= 0 && yy <= 99 ? 2000 + yy : yy;
+            int month = Integer.parseInt(digits.substring(2, 4));
+            int day = Integer.parseInt(digits.substring(4, 6));
+            return java.time.LocalDate.of(year, month, day);
+        }
+        try {
+            return java.time.LocalDate.parse(raw);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String formatOpeningDate(java.time.LocalDate date) {
+        if (date == null) {
+            return "";
+        }
+        return date.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
     }
 
     private static String guessSavingsClass(String name, String majorName) {
@@ -235,7 +272,9 @@ public class FinancialProductService {
                 row.getPeriodEndMonth(),
                 row.getPeriodEndDay(),
                 row.getPrincipal(),
-                row.getCardLimit());
+                row.getCardLimit(),
+                row.getOpeningBalance(),
+                formatOpeningDate(row.getOpeningDate()));
     }
 
     private static LedgerBook bookOrDefault(LedgerBook book) {

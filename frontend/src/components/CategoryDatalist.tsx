@@ -7,10 +7,18 @@ export function useCategories(book: LedgerBook, refreshKey = 0) {
   const [categories, setCategories] = useState<CategoryList | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     if (refreshKey > 0) clearCategoryCache(book);
     fetchCategories(book)
-      .then(setCategories)
-      .catch(() => setCategories(null));
+      .then((data) => {
+        if (!cancelled) setCategories(data);
+      })
+      .catch(() => {
+        if (!cancelled) setCategories(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [book, refreshKey]);
 
   return categories;

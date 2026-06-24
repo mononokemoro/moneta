@@ -24,8 +24,14 @@ public interface CbCategoryRepository extends JpaRepository<CbCategory, Long> {
     boolean existsByBookAndCategoryTypeAndNameAndTier(
             LedgerBook book, CategoryType type, String name, CategoryTier tier);
 
+    boolean existsByBookAndCategoryTypeAndNameAndTierAndParentId(
+            LedgerBook book, CategoryType type, String name, CategoryTier tier, Long parentId);
+
     java.util.Optional<CbCategory> findByBookAndCategoryTypeAndNameAndTier(
             LedgerBook book, CategoryType type, String name, CategoryTier tier);
+
+    java.util.Optional<CbCategory> findByBookAndCategoryTypeAndNameAndTierAndParentId(
+            LedgerBook book, CategoryType type, String name, CategoryTier tier, Long parentId);
 
     long countByBook(LedgerBook book);
 

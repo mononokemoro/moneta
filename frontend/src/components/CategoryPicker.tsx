@@ -8,7 +8,9 @@ import { matchesKoreanSearch } from "../util/koreanSearch";
 
 type Props = {
   value: string;
+  categoryId?: number | null;
   onChange: (value: string) => void;
+  onCategoryIdChange?: (id: number | null) => void;
   groups: CategoryGroup[];
   disabled?: boolean;
   className?: string;
@@ -30,7 +32,7 @@ function filterGroups(groups: CategoryGroup[], query: string): CategoryGroup[] {
 }
 
 export const CategoryPicker = forwardRef<HTMLInputElement, Props>(function CategoryPicker(
-  { value, onChange, groups, disabled, className, placeholder },
+  { value, categoryId: _categoryId, onChange, onCategoryIdChange, groups, disabled, className, placeholder },
   ref,
 ) {
   const holder = useRef<{ el: HTMLInputElement | null }>({ el: null });
@@ -81,8 +83,9 @@ export const CategoryPicker = forwardRef<HTMLInputElement, Props>(function Categ
     }
   }, [open, filtered, activeMajorId]);
 
-  function selectOption(name: string) {
+  function selectOption(id: number | null, name: string) {
     onChange(name);
+    onCategoryIdChange?.(id);
     setOpen(false);
   }
 
@@ -112,7 +115,7 @@ export const CategoryPicker = forwardRef<HTMLInputElement, Props>(function Categ
                 onMouseEnter={() => setActiveMajorId(major.id)}
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  if (major.children.length === 0) selectOption(major.name);
+                  if (major.children.length === 0) selectOption(major.id, major.name);
                 }}
               >
                 <span className="cb-catpicker__majorLabel">{major.name}</span>
@@ -133,7 +136,7 @@ export const CategoryPicker = forwardRef<HTMLInputElement, Props>(function Categ
                 className="cb-catpicker__minor"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  selectOption(minor.name);
+                  selectOption(minor.id, minor.name);
                 }}
               >
                 {minor.name}
@@ -157,6 +160,7 @@ export const CategoryPicker = forwardRef<HTMLInputElement, Props>(function Categ
         placeholder={placeholder}
         onChange={(e) => {
           onChange(e.target.value);
+          onCategoryIdChange?.(null);
           setFilterText(e.target.value);
           setOpen(true);
         }}

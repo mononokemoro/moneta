@@ -9,6 +9,7 @@ import com.pininicong.cashbook.dto.TransactionCreateRequest;
 import com.pininicong.cashbook.dto.TransactionUpdateRequest;
 import com.pininicong.cashbook.repo.CbTransactionRepository;
 import com.pininicong.cashbook.service.CashbookService;
+import com.pininicong.cashbook.service.CategoryService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,13 @@ class CommonExpenseMirrorTest {
 
     @Autowired CashbookService cashbookService;
     @Autowired CbTransactionRepository txRepo;
+    @Autowired CategoryService categoryService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void seedCategories() {
+        categoryService.migrateExpenseHierarchy(LedgerBook.PERSONAL);
+        categoryService.migrateExpenseHierarchy(LedgerBook.HOUSEHOLD);
+    }
 
     @Test
     void commonHouseholdExpenseMirrorsToPersonal() {
@@ -33,12 +41,17 @@ class CommonExpenseMirrorTest {
                                 TxType.EXPENSE,
                                 "공과금",
                                 new BigDecimal("50000"),
+                                null,
                                 "기타",
+                                null,
                                 "",
+                                null,
                                 "",
                                 null,
                                 LedgerBook.HOUSEHOLD,
-                                ExpenseScope.COMMON));
+                                ExpenseScope.COMMON,
+                                null,
+                                null));
 
         var household =
                 txRepo.findById(created.id()).orElseThrow();
@@ -56,11 +69,17 @@ class CommonExpenseMirrorTest {
                 new TransactionUpdateRequest(
                         "공과금(수정)",
                         new BigDecimal("55000"),
+                        null,
                         "기타",
-                        "",
+                        null,
                         "",
                         null,
-                        ExpenseScope.COMMON));
+                        "",
+                        null,
+                        ExpenseScope.COMMON,
+                        null,
+                        null,
+                        null));
 
         personal = txRepo.findById(personal.getId()).orElseThrow();
         assertThat(personal.getTitle()).isEqualTo("공과금(수정)");
@@ -82,12 +101,17 @@ class CommonExpenseMirrorTest {
                                 TxType.EXPENSE,
                                 "식비",
                                 new BigDecimal("12000"),
+                                null,
                                 "기타",
+                                null,
                                 "",
+                                null,
                                 "",
                                 null,
                                 LedgerBook.PERSONAL,
-                                ExpenseScope.COMMON));
+                                ExpenseScope.COMMON,
+                                null,
+                                null));
 
         var personal = txRepo.findById(created.id()).orElseThrow();
         assertThat(personal.getExpenseScope()).isEqualTo(ExpenseScope.COMMON);
@@ -111,12 +135,17 @@ class CommonExpenseMirrorTest {
                         TxType.EXPENSE,
                         "간식",
                         new BigDecimal("3000"),
+                        null,
                         "기타",
+                        null,
                         "",
+                        null,
                         "",
                         null,
                         LedgerBook.HOUSEHOLD,
-                        ExpenseScope.NORMAL));
+                        ExpenseScope.NORMAL,
+                        null,
+                        null));
 
         assertThat(txRepo.count()).isEqualTo(before + 1);
     }

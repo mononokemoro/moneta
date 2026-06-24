@@ -16,6 +16,11 @@ type Props = {
   incomeCategories: string[];
 };
 
+const KEYWORD_TABS = [
+  { id: "expense", label: "지출 예약어" },
+  { id: "income", label: "수입 예약어" },
+] as const;
+
 type KeywordDraft = {
   key: string;
   id?: number;
@@ -175,10 +180,7 @@ export function KeywordSettingsPanel({ book, expenseCategories, incomeCategories
 
   return (
     <MonetaPanel
-      tabs={[
-        { id: "expense", label: "지출 예약어" },
-        { id: "income", label: "수입 예약어" },
-      ]}
+      tabs={[...KEYWORD_TABS]}
       activeTab={tab}
       onTabChange={(id) => setTab(id as "expense" | "income")}
       hint={

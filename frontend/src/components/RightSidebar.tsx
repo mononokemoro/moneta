@@ -1,8 +1,9 @@
 import type { DayView } from "../api/cashbook";
 import { formatMoney } from "../formatMoney";
 import { formatVisitDate } from "../util/dateUtil";
+import { openDataWindow } from "../util/openDataWindow";
 
-export type SidebarView = "cashbook" | "report" | "data" | "settings";
+export type SidebarView = "cashbook" | "report" | "settings";
 
 type Props = {
   view: SidebarView;
@@ -78,11 +79,7 @@ export function RightSidebar({ view, onViewChange, date, day }: Props) {
         >
           보고서
         </button>
-        <button
-          type="button"
-          className={view === "data" ? "cb-tab is-active" : "cb-tab"}
-          onClick={() => onViewChange("data")}
-        >
+        <button type="button" className="cb-tab" onClick={() => openDataWindow()}>
           데이터
         </button>
       </nav>

@@ -57,6 +57,18 @@ public class CategoryController {
         categoryService.delete(id, LedgerBookParser.parse(book));
     }
 
+    @GetMapping("/{id}/transactions")
+    public CategoryDto.CategoryTransactionsResponse listTransactions(
+            @PathVariable Long id, @RequestParam(defaultValue = "PERSONAL") String book) {
+        return categoryService.listTransactionsForCategory(id, LedgerBookParser.parse(book));
+    }
+
+    @GetMapping("/{id}/transactions/table")
+    public CategoryDto.CategoryTransactionTableResponse listTransactionTable(
+            @PathVariable Long id, @RequestParam(defaultValue = "PERSONAL") String book) {
+        return categoryService.listTransactionTableForCategory(id, LedgerBookParser.parse(book));
+    }
+
     @PutMapping("/reorder")
     public void reorder(
             @RequestParam(defaultValue = "PERSONAL") String book,

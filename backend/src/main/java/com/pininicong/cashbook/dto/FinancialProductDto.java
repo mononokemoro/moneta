@@ -26,7 +26,9 @@ public record FinancialProductDto(
         String periodEndMonth,
         String periodEndDay,
         String principal,
-        String cardLimit) {
+        String cardLimit,
+        java.math.BigDecimal openingBalance,
+        String openingDate) {
 
     public record FinancialProductListResponse(
             List<FinancialProductDto> savings,

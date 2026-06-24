@@ -16,10 +16,10 @@ import { ProductManagementPanel } from "./ProductManagementPanel";
 export type SettingsSection = "categories" | "products" | "keywords" | "fixed";
 
 const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
-  { id: "categories", label: "분류항목관리" },
-  { id: "products", label: "상품관리" },
-  { id: "keywords", label: "예약어설정" },
+  { id: "categories", label: "분류항목" },
+  { id: "products", label: "금융상품" },
   { id: "fixed", label: "고정등록" },
+  { id: "keywords", label: "예약어" },
 ];
 
 type Props = {

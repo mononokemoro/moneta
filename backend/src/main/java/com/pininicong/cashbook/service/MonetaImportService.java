@@ -1,5 +1,6 @@
 package com.pininicong.cashbook.service;
 
+import com.pininicong.cashbook.imports.HouseholdIncomeTitleCategoryMapper;
 import com.pininicong.cashbook.imports.MonetaCategoryCatalog;
 import com.pininicong.cashbook.domain.CbCategory;
 import com.pininicong.cashbook.domain.CbCategory.CategoryType;
@@ -21,12 +22,15 @@ import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -42,16 +46,25 @@ public class MonetaImportService {
     private final CbCategoryRepository categoryRepo;
     private final CbFixedItemRepository fixedRepo;
     private final CategoryService categoryService;
+    private final TransactionCategorySupport categorySupport;
+    private final TransactionCardSupport cardSupport;
+    private final TransactionSavingsProductSupport savingsProductSupport;
 
     public MonetaImportService(
             CbTransactionRepository txRepo,
             CbCategoryRepository categoryRepo,
             CbFixedItemRepository fixedRepo,
-            CategoryService categoryService) {
+            CategoryService categoryService,
+            TransactionCategorySupport categorySupport,
+            TransactionCardSupport cardSupport,
+            TransactionSavingsProductSupport savingsProductSupport) {
         this.txRepo = txRepo;
         this.categoryRepo = categoryRepo;
         this.fixedRepo = fixedRepo;
         this.categoryService = categoryService;
+        this.categorySupport = categorySupport;
+        this.cardSupport = cardSupport;
+        this.savingsProductSupport = savingsProductSupport;
     }
 
     @Transactional(readOnly = true)
@@ -192,40 +205,60 @@ public class MonetaImportService {
 
         for (ParsedRow r : rows) {
             if (r.amount().compareTo(ZERO) == 0) continue;
+            switch (r.kind()) {
+                case EXPENSE -> expenseCats.add(r.category());
+                case INCOME -> incomeCats.add(r.category());
+                case SAVINGS -> savingsNames.add(r.title());
+                case INSURANCE -> insuranceNames.add(r.title());
+                default -> {}
+            }
+        }
+
+        int catAdded = registerCategories(book, expenseCats, incomeCats, savingsNames, insuranceNames);
+
+        for (ParsedRow r : rows) {
+            if (r.amount().compareTo(ZERO) == 0) continue;
 
             CbTransaction t = new CbTransaction();
             t.setBook(book);
             t.setTxDate(r.date());
             t.setTitle(r.title() != null ? r.title() : "");
             t.setAmount(r.amount());
-            t.setCategory(r.category() != null ? r.category() : "");
-            t.setCardName(r.cardName() != null ? r.cardName() : "");
             t.setRemarks(r.remarks() != null ? r.remarks() : "");
 
             switch (r.kind()) {
                 case EXPENSE -> {
                     t.setTxType(TxType.EXPENSE);
-                    expenseCats.add(r.category());
                     exp++;
                 }
                 case INCOME -> {
                     t.setTxType(TxType.INCOME);
-                    incomeCats.add(r.category());
                     inc++;
                 }
                 case SAVINGS -> {
                     t.setTxType(TxType.SAVINGS);
                     t.setAccumulatedAmount(ZERO);
-                    savingsNames.add(r.title());
                     sav++;
                 }
                 case INSURANCE -> {
                     t.setTxType(TxType.SAVINGS);
-                    t.setCategory("보험");
                     t.setAccumulatedAmount(ZERO);
-                    insuranceNames.add(r.title());
                     ins++;
                 }
+            }
+
+            if (r.kind() == ReportKind.INSURANCE) {
+                applyCategoryId(t, book, TxType.SAVINGS, "보험");
+            } else {
+                applyCategoryId(t, book, t.getTxType(), r.category());
+            }
+            if (t.getTxType() == TxType.EXPENSE) {
+                cardSupport
+                        .resolveCard(book, null, r.cardName())
+                        .ifPresent(resolved -> t.setCardProductId(resolved.id()));
+            }
+            if (t.getTxType() == TxType.SAVINGS) {
+                savingsProductSupport.applySavingsProduct(t, null, t.getTitle());
             }
 
             String sortKey = r.date() + ":" + t.getTxType();
@@ -234,7 +267,6 @@ public class MonetaImportService {
             txRepo.save(t);
         }
 
-        int catAdded = registerCategories(book, expenseCats, incomeCats, savingsNames, insuranceNames);
         int fixedAdded = registerFixedItems(book, savingsNames, insuranceNames);
 
         return new MonetaImportResult(exp, inc, sav, ins, catAdded, fixedAdded);
@@ -298,4 +330,135 @@ public class MonetaImportService {
         }
         return added;
     }
+
+    private void applyCategoryId(
+            CbTransaction t, LedgerBook book, TxType txType, String categoryName) {
+        CategoryType type = TransactionCategorySupport.categoryTypeFor(txType);
+        categorySupport
+                .resolveMinor(book, type, null, categoryName)
+                .ifPresent(resolved -> t.setCategoryId(resolved.id()));
+    }
+
+    /**
+     * category_id 가 비어 있는 거래를 모네타 HTML(일자·항목·금액)과 대조해 분류를 연결합니다.
+     * import 폴더가 없거나 매칭되지 않으면 0을 반환합니다.
+     */
+    @Transactional
+    public int backfillMissingCategoryIdsFromMoneta(Path root, LedgerBook book) {
+        if (root == null || !Files.isDirectory(root)) {
+            return 0;
+        }
+        try {
+            List<ParsedRow> rows = new ArrayList<>();
+            Path expense = root.resolve("지출");
+            Path income = root.resolve("수입");
+            if (Files.isDirectory(expense)) {
+                rows.addAll(parseDirQuiet(expense, ReportKind.EXPENSE));
+            }
+            if (Files.isDirectory(income)) {
+                rows.addAll(parseDirQuiet(income, ReportKind.INCOME));
+            }
+            if (rows.isEmpty()) {
+                return 0;
+            }
+            return backfillMissingCategoryIds(book, rows);
+        } catch (Exception ex) {
+            return 0;
+        }
+    }
+
+    /** 가계 수입: 제목 패턴으로 category_id 를 보강·교정합니다. */
+    @Transactional
+    public int backfillHouseholdIncomeCategoryIdsFromTitles() {
+        int updated = 0;
+        for (CbTransaction tx :
+                txRepo.findByBookAndTxTypeOrderByTxDateDescIdDesc(
+                        LedgerBook.HOUSEHOLD, TxType.INCOME)) {
+            Optional<String> categoryName =
+                    HouseholdIncomeTitleCategoryMapper.categoryForTitle(tx.getTitle());
+            if (categoryName.isEmpty()) {
+                continue;
+            }
+            String expected = categoryName.get();
+            String current =
+                    categorySupport.name(LedgerBook.HOUSEHOLD, tx.getCategoryId());
+            if (expected.equals(current)) {
+                continue;
+            }
+            if (applyResolvedCategoryId(tx, LedgerBook.HOUSEHOLD, TxType.INCOME, expected)) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private int backfillMissingCategoryIds(LedgerBook book, List<ParsedRow> rows) {
+        Map<TxMatchKey, String> categoryByKey = new LinkedHashMap<>();
+        for (ParsedRow row : rows) {
+            if (row.amount().compareTo(ZERO) == 0) {
+                continue;
+            }
+            TxType txType =
+                    switch (row.kind()) {
+                        case EXPENSE -> TxType.EXPENSE;
+                        case INCOME -> TxType.INCOME;
+                        case SAVINGS, INSURANCE -> TxType.SAVINGS;
+                    };
+            if (txType == TxType.SAVINGS) {
+                continue;
+            }
+            String categoryName =
+                    row.kind() == ReportKind.INSURANCE ? "보험" : normalize(row.category());
+            if (categoryName.isEmpty()) {
+                continue;
+            }
+            categoryByKey.put(
+                    new TxMatchKey(row.date(), normalize(row.title()), row.amount(), txType),
+                    categoryName);
+        }
+
+        int updated = 0;
+        for (CbTransaction tx : txRepo.findByBookAndCategoryIdIsNull(book)) {
+            String categoryName =
+                    categoryByKey.get(
+                            new TxMatchKey(
+                                    tx.getTxDate(),
+                                    normalize(tx.getTitle()),
+                                    tx.getAmount(),
+                                    tx.getTxType()));
+            if (categoryName == null || categoryName.isEmpty()) {
+                continue;
+            }
+            if (applyResolvedCategoryId(tx, book, tx.getTxType(), categoryName)) {
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private boolean applyResolvedCategoryId(
+            CbTransaction tx, LedgerBook book, TxType txType, String categoryName) {
+        CategoryType type = TransactionCategorySupport.categoryTypeFor(txType);
+        var resolved = categorySupport.resolveMinor(book, type, null, categoryName);
+        if (resolved.isEmpty()) {
+            return false;
+        }
+        tx.setCategoryId(resolved.get().id());
+        txRepo.save(tx);
+        return true;
+    }
+
+    private List<ParsedRow> parseDirQuiet(Path dir, ReportKind kind) {
+        try {
+            return parseDir(dir, kind, "*");
+        } catch (IllegalArgumentException ex) {
+            return List.of();
+        }
+    }
+
+    private static String normalize(String value) {
+        return value != null ? value.trim() : "";
+    }
+
+    private record TxMatchKey(LocalDate date, String title, BigDecimal amount, TxType txType) {}
 }

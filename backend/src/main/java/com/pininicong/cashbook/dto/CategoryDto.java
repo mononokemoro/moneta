@@ -31,4 +31,32 @@ public record CategoryDto(
             List<CategoryGroupDto> income,
             List<CategoryGroupDto> savings,
             List<CategoryGroupDto> insurance) {}
+
+    public record CategoryTransactionRowDto(
+            Long id,
+            String txDate,
+            String txType,
+            String title,
+            java.math.BigDecimal amount,
+            Long categoryId,
+            Long cardProductId,
+            String cardName,
+            String remarks) {}
+
+    public record CategoryTransactionsResponse(
+            Long categoryId,
+            String categoryName,
+            CategoryType categoryType,
+            CategoryTier tier,
+            int count,
+            java.math.BigDecimal totalAmount,
+            List<CategoryTransactionRowDto> items) {}
+
+    public record CategoryTransactionTableResponse(
+            String tableName,
+            Long categoryId,
+            String categoryName,
+            int count,
+            String querySql,
+            List<TransactionTableRowDto> rows) {}
 }

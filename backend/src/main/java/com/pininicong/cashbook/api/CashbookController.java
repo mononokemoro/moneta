@@ -5,9 +5,11 @@ import com.pininicong.cashbook.dto.CalendarMarkersDto;
 import com.pininicong.cashbook.dto.CashBalanceUpdateRequest;
 import com.pininicong.cashbook.dto.CreatedTransactionDto;
 import com.pininicong.cashbook.dto.DailySheetUpdateRequest;
+import com.pininicong.cashbook.dto.DayTransactionTableResponse;
 import com.pininicong.cashbook.dto.DayViewDto;
 import com.pininicong.cashbook.dto.FixedItemSendRequest;
 import com.pininicong.cashbook.dto.TransactionCreateRequest;
+import com.pininicong.cashbook.dto.TransactionMoveRequest;
 import com.pininicong.cashbook.dto.TransactionUpdateRequest;
 import com.pininicong.cashbook.service.CashbookService;
 import com.pininicong.cashbook.support.LedgerBookParser;
@@ -45,6 +47,13 @@ public class CashbookController {
         return cashbookService.getDay(date, LedgerBookParser.parse(book));
     }
 
+    @GetMapping("/day/transactions/table")
+    public DayTransactionTableResponse dayTransactionTable(
+            @RequestParam @DateTimeFormat(iso = ISO.DATE) LocalDate date,
+            @RequestParam(defaultValue = "PERSONAL") String book) {
+        return cashbookService.getDayTransactionTable(date, LedgerBookParser.parse(book));
+    }
+
     @GetMapping("/calendar-markers")
     public CalendarMarkersDto calendarMarkers(
             @RequestParam String yearMonth, @RequestParam(defaultValue = "PERSONAL") String book) {
@@ -64,6 +73,11 @@ public class CashbookController {
     @PutMapping("/transactions/{id}")
     public void update(@PathVariable Long id, @Valid @RequestBody TransactionUpdateRequest req) {
         cashbookService.updateTransaction(id, req);
+    }
+
+    @PostMapping("/transactions/move")
+    public void move(@Valid @RequestBody TransactionMoveRequest req) {
+        cashbookService.moveTransactions(req);
     }
 
     @PostMapping("/fixed-items/send-to-cashbook")

@@ -1,4 +1,5 @@
 import type { LedgerBook } from "./ledgerBook";
+import type { TransactionTableRow } from "./transactionTable";
 
 export type CategoryType = "EXPENSE" | "INCOME" | "SAVINGS" | "INSURANCE";
 export type CategoryTier = "MAJOR" | "MINOR";
@@ -47,6 +48,28 @@ const cache = new Map<LedgerBook, CategoryList>();
 
 export function flattenMinorNames(groups: CategoryGroup[]): string[] {
   return groups.flatMap((g) => g.children.map((c) => c.name));
+}
+
+export function findMinorById(
+  groups: CategoryGroup[],
+  id: number | null | undefined
+): CategoryItem | null {
+  if (id == null) return null;
+  for (const g of groups) {
+    const found = g.children.find((c) => c.id === id);
+    if (found) return found;
+  }
+  return null;
+}
+
+export function findMinorByName(groups: CategoryGroup[], name: string): CategoryItem | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  for (const g of groups) {
+    const found = g.children.find((c) => c.name === trimmed);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** 입력/선택 UI용 활성 분류 트리 */
@@ -166,6 +189,63 @@ export function groupsForType(list: CategoryList, type: CategoryType): CategoryG
       return list.insurance;
   }
 }
+
+export async function fetchCategoryTransactions(
+  categoryId: number,
+  book: LedgerBook = "PERSONAL"
+): Promise<CategoryTransactionsResponse> {
+  const r = await fetch(
+    `/api/categories/${categoryId}/transactions?book=${encodeURIComponent(book)}`,
+    NO_STORE_INIT
+  );
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export async function fetchCategoryTransactionTable(
+  categoryId: number,
+  book: LedgerBook = "PERSONAL"
+): Promise<CategoryTransactionTableResponse> {
+  const r = await fetch(
+    `/api/categories/${categoryId}/transactions/table?book=${encodeURIComponent(book)}`,
+    NO_STORE_INIT
+  );
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+export interface CategoryTransactionRow {
+  id: number;
+  txDate: string;
+  txType: string;
+  title: string;
+  amount: number;
+  categoryId: number | null;
+  cardProductId: number | null;
+  cardName: string;
+  remarks: string;
+}
+
+export interface CategoryTransactionsResponse {
+  categoryId: number;
+  categoryName: string;
+  categoryType: CategoryType;
+  tier: CategoryTier;
+  count: number;
+  totalAmount: number;
+  items: CategoryTransactionRow[];
+}
+
+export interface CategoryTransactionTableResponse {
+  tableName: string;
+  categoryId: number;
+  categoryName: string;
+  count: number;
+  querySql: string;
+  rows: TransactionTableRow[];
+}
+
+export type CategoryTransactionTableRow = TransactionTableRow;
 
 export async function saveCategoryPreferences(
   book: LedgerBook,

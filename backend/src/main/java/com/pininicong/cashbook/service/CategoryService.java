@@ -14,12 +14,21 @@ import com.pininicong.cashbook.dto.CategoryPreferencesRequest;
 import com.pininicong.cashbook.dto.CategoryPreferencesRequest.CategoryPreferenceItem;
 import com.pininicong.cashbook.dto.CategoryReorderRequest;
 import com.pininicong.cashbook.dto.CategoryUpdateRequest;
+import com.pininicong.cashbook.imports.HouseholdExpenseCategoryCatalog;
+import com.pininicong.cashbook.imports.HouseholdIncomeCategoryCatalog;
 import com.pininicong.cashbook.imports.MonetaIncomeCategoryCatalog;
 import com.pininicong.cashbook.imports.MonetaExpenseCategoryCatalog;
 import com.pininicong.cashbook.repo.CbCategoryKeywordRepository;
 import com.pininicong.cashbook.repo.CbCategoryRepository;
 import com.pininicong.cashbook.repo.CbFixedItemRepository;
 import com.pininicong.cashbook.repo.CbTransactionRepository;
+import com.pininicong.cashbook.dto.CategoryDto.CategoryTransactionRowDto;
+import com.pininicong.cashbook.dto.CategoryDto.CategoryTransactionTableResponse;
+import com.pininicong.cashbook.dto.CategoryDto.CategoryTransactionsResponse;
+import com.pininicong.cashbook.dto.TransactionTableRowDto;
+import com.pininicong.cashbook.support.TransactionTableSupport;
+import com.pininicong.cashbook.domain.CbTransaction;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,16 +48,19 @@ public class CategoryService {
     private final CbTransactionRepository txRepo;
     private final CbFixedItemRepository fixedRepo;
     private final CbCategoryKeywordRepository keywordRepo;
+    private final TransactionCardSupport cardSupport;
 
     public CategoryService(
             CbCategoryRepository categoryRepo,
             CbTransactionRepository txRepo,
             CbFixedItemRepository fixedRepo,
-            CbCategoryKeywordRepository keywordRepo) {
+            CbCategoryKeywordRepository keywordRepo,
+            TransactionCardSupport cardSupport) {
         this.categoryRepo = categoryRepo;
         this.txRepo = txRepo;
         this.fixedRepo = fixedRepo;
         this.keywordRepo = keywordRepo;
+        this.cardSupport = cardSupport;
     }
 
     public CategoryListResponse listCategories(LedgerBook book) {
@@ -92,8 +104,8 @@ public class CategoryService {
             throw new IllegalArgumentException("소분류는 대분류를 선택하세요.");
         }
         CbCategory parent = requireMajor(ledger, parentId, req.categoryType());
-        if (categoryRepo.existsByBookAndCategoryTypeAndNameAndTier(
-                ledger, req.categoryType(), name, CategoryTier.MINOR)) {
+        if (categoryRepo.existsByBookAndCategoryTypeAndNameAndTierAndParentId(
+                ledger, req.categoryType(), name, CategoryTier.MINOR, parent.getId())) {
             throw new IllegalArgumentException("이미 등록된 분류입니다: " + name);
         }
         CbCategory row = new CbCategory();
@@ -122,9 +134,13 @@ public class CategoryService {
         String oldName = row.getName();
         boolean nameChanged = !oldName.equals(newName);
         if (nameChanged) {
+            Long parentId = row.getParentId();
             var duplicate =
-                    categoryRepo.findByBookAndCategoryTypeAndNameAndTier(
-                            ledger, row.getCategoryType(), newName, row.getTier());
+                    parentId != null && row.getTier() == CategoryTier.MINOR
+                            ? categoryRepo.findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                                    ledger, row.getCategoryType(), newName, row.getTier(), parentId)
+                            : categoryRepo.findByBookAndCategoryTypeAndNameAndTier(
+                                    ledger, row.getCategoryType(), newName, row.getTier());
             if (duplicate.isPresent() && !duplicate.get().getId().equals(row.getId())) {
                 throw new IllegalArgumentException("이미 등록된 분류입니다: " + newName);
             }
@@ -179,10 +195,126 @@ public class CategoryService {
         if (isCategoryInUse(ledger, row)) {
             throw new IllegalArgumentException("내역에 사용 중인 분류는 삭제할 수 없습니다.");
         }
-        if (!Boolean.TRUE.equals(row.getUserCreated())) {
-            throw new IllegalArgumentException("기본항목은 삭제할 수 없습니다.");
-        }
         categoryRepo.delete(row);
+    }
+
+    public CategoryTransactionsResponse listTransactionsForCategory(Long id, LedgerBook book) {
+        LedgerBook ledger = bookOrDefault(book);
+        CbCategory row =
+                categoryRepo
+                        .findByIdAndBook(id, ledger)
+                        .orElseThrow(() -> new IllegalArgumentException("분류 없음: " + id));
+        if (row.getCategoryType() != CategoryType.INCOME
+                && row.getCategoryType() != CategoryType.EXPENSE) {
+            throw new IllegalArgumentException("수입·지출 분류만 조회할 수 있습니다.");
+        }
+
+        List<CbTransaction> txs = loadTransactionsForCategory(ledger, row);
+        Map<Long, String> cardNames = cardSupport.cardNameIndex(ledger);
+        BigDecimal total = BigDecimal.ZERO;
+        List<CategoryTransactionRowDto> items = new ArrayList<>();
+        for (CbTransaction tx : txs) {
+            BigDecimal amount = tx.getAmount() != null ? tx.getAmount() : BigDecimal.ZERO;
+            total = total.add(amount);
+            String cardName =
+                    tx.getCardProductId() != null
+                            ? cardNames.getOrDefault(tx.getCardProductId(), "")
+                            : "";
+            items.add(
+                    new CategoryTransactionRowDto(
+                            tx.getId(),
+                            tx.getTxDate().toString(),
+                            txTypeLabel(tx.getTxType()),
+                            tx.getTitle() != null ? tx.getTitle() : "",
+                            amount,
+                            tx.getCategoryId(),
+                            tx.getCardProductId(),
+                            cardName,
+                            tx.getRemarks() != null ? tx.getRemarks() : ""));
+        }
+
+        return new CategoryTransactionsResponse(
+                row.getId(),
+                row.getName(),
+                row.getCategoryType(),
+                row.getTier(),
+                items.size(),
+                total,
+                items);
+    }
+
+    public CategoryTransactionTableResponse listTransactionTableForCategory(Long id, LedgerBook book) {
+        LedgerBook ledger = bookOrDefault(book);
+        CbCategory row =
+                categoryRepo
+                        .findByIdAndBook(id, ledger)
+                        .orElseThrow(() -> new IllegalArgumentException("분류 없음: " + id));
+        if (row.getCategoryType() != CategoryType.INCOME
+                && row.getCategoryType() != CategoryType.EXPENSE) {
+            throw new IllegalArgumentException("수입·지출 분류만 조회할 수 있습니다.");
+        }
+
+        List<CbTransaction> txs = loadTransactionsForCategory(ledger, row);
+        List<Long> categoryIds = resolveCategoryIdsForTransactions(ledger, row);
+        List<TransactionTableRowDto> rows =
+                txs.stream().map(TransactionTableSupport::toRow).toList();
+        String querySql = TransactionTableSupport.queryForCategory(ledger, categoryIds);
+
+        return new CategoryTransactionTableResponse(
+                TransactionTableSupport.TABLE_NAME,
+                row.getId(),
+                row.getName(),
+                rows.size(),
+                querySql,
+                rows);
+    }
+
+    private List<CbTransaction> loadTransactionsForCategory(LedgerBook ledger, CbCategory row) {
+        List<Long> categoryIds = resolveCategoryIdsForTransactions(ledger, row);
+        if (categoryIds.isEmpty()) {
+            return List.of();
+        }
+        return txRepo.findByBookAndCategoryIdInOrderByTxDateDescSortOrderAscIdDesc(
+                ledger, categoryIds);
+    }
+
+    private List<Long> resolveCategoryIdsForTransactions(LedgerBook ledger, CbCategory row) {
+        if (row.getTier() == CategoryTier.MINOR) {
+            return allMinorIdsByName(ledger, row.getCategoryType(), row.getName());
+        }
+        return categoryRepo
+                .findByBookAndCategoryTypeAndParentIdOrderBySortOrderAscNameAsc(
+                        ledger, row.getCategoryType(), row.getId())
+                .stream()
+                .flatMap(
+                        child ->
+                                allMinorIdsByName(ledger, row.getCategoryType(), child.getName())
+                                        .stream())
+                .distinct()
+                .toList();
+    }
+
+    /** 동명 소분류가 여러 ID로 존재할 때(마이그레이션·재구성 잔여) 모두 조회합니다. */
+    private List<Long> allMinorIdsByName(LedgerBook ledger, CategoryType type, String name) {
+        if (name == null || name.isBlank()) {
+            return List.of();
+        }
+        return categoryRepo
+                .findByBookAndCategoryTypeAndTierOrderBySortOrderAscNameAsc(
+                        ledger, type, CategoryTier.MINOR)
+                .stream()
+                .filter(c -> name.equals(c.getName()))
+                .map(CbCategory::getId)
+                .toList();
+    }
+
+    private static String txTypeLabel(TxType type) {
+        return switch (type) {
+            case EXPENSE -> "지출";
+            case INCOME -> "수입";
+            case SAVINGS -> "저축";
+            default -> type.name();
+        };
     }
 
     @Transactional
@@ -210,13 +342,11 @@ public class CategoryService {
         String name = normalize(fullName);
         if (name.isEmpty()) return;
         if (type == CategoryType.INCOME) {
-            ensureCatalogMinor(
-                    ledger, CategoryType.INCOME, name, MonetaIncomeCategoryCatalog.minorToMajor());
+            ensureCatalogMinor(ledger, CategoryType.INCOME, name, incomeMinorToMajor(ledger));
             return;
         }
-        if (type == CategoryType.EXPENSE && ledger == LedgerBook.PERSONAL) {
-            ensureCatalogMinor(
-                    ledger, CategoryType.EXPENSE, name, MonetaExpenseCategoryCatalog.minorToMajor());
+        if (type == CategoryType.EXPENSE) {
+            ensureCatalogMinor(ledger, CategoryType.EXPENSE, name, expenseMinorToMajor(ledger));
             return;
         }
         if (categoryRepo.existsByBookAndCategoryTypeAndNameAndTier(
@@ -240,34 +370,162 @@ public class CategoryService {
 
     @Transactional
     public int migrateIncomeHierarchy(LedgerBook ledger) {
-        return migrateHierarchy(
-                ledger,
-                CategoryType.INCOME,
-                incomeCatalogGroups(),
-                MonetaIncomeCategoryCatalog.minorToMajor());
+        LedgerBook book = bookOrDefault(ledger);
+        int changed = 0;
+        if (book == LedgerBook.PERSONAL) {
+            changed += reparentIncomeGitaMajor(book);
+        }
+        Map<String, String> minorToMajor = incomeMinorToMajor(book);
+        changed +=
+                migrateHierarchy(
+                        book, CategoryType.INCOME, incomeCatalogGroups(book), minorToMajor);
+        return changed;
+    }
+
+    /**
+     * 수입 대분류 '기타' 잔존 항목을 부수입 소분류로 옮깁니다.
+     * 주수입 하위 '기타' 소분류는 그대로 둡니다.
+     */
+    private int reparentIncomeGitaMajor(LedgerBook ledger) {
+        var gitaMajor =
+                categoryRepo.findByBookAndCategoryTypeAndNameAndTier(
+                        ledger, CategoryType.INCOME, "기타", CategoryTier.MAJOR);
+        if (gitaMajor.isEmpty()) {
+            return 0;
+        }
+        CbCategory sideIncome =
+                ensureCatalogMajor(
+                        ledger,
+                        CategoryType.INCOME,
+                        "부수입",
+                        majorSortOrder(
+                                ledger,
+                                CategoryType.INCOME,
+                                "부수입",
+                                incomeMinorToMajor(ledger)));
+
+        var existingUnderSide =
+                categoryRepo.findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                        ledger,
+                        CategoryType.INCOME,
+                        "기타",
+                        CategoryTier.MINOR,
+                        sideIncome.getId());
+        if (existingUnderSide.isPresent()) {
+            categoryRepo.delete(gitaMajor.get());
+            return 1;
+        }
+
+        CbCategory majorRow = gitaMajor.get();
+        majorRow.setTier(CategoryTier.MINOR);
+        majorRow.setParentId(sideIncome.getId());
+        if (majorRow.getSortOrder() == null) {
+            majorRow.setSortOrder(1);
+        }
+        categoryRepo.save(majorRow);
+        return 1;
     }
 
     @Transactional
     public int migrateExpenseHierarchy(LedgerBook ledger) {
-        return migrateHierarchy(
-                ledger,
-                CategoryType.EXPENSE,
-                expenseCatalogGroups(),
-                MonetaExpenseCategoryCatalog.minorToMajor());
+        LedgerBook book = bookOrDefault(ledger);
+        int changed = 0;
+        if (book == LedgerBook.PERSONAL) {
+            changed += removeDeprecatedExpenseMajor(book, "낚시", "취미");
+        }
+        Map<String, String> minorToMajor = expenseMinorToMajor(book);
+        changed +=
+                migrateHierarchy(
+                        book, CategoryType.EXPENSE, expenseCatalogGroups(book), minorToMajor);
+        return changed;
+    }
+
+    /** 폐기된 지출 대분류의 잔여 소분류를 옮기고, 빈 대분류를 제거합니다. */
+    private int removeDeprecatedExpenseMajor(
+            LedgerBook ledger, String deprecatedMajorName, String targetMajorName) {
+        CbCategory deprecated = findMajor(ledger, CategoryType.EXPENSE, deprecatedMajorName);
+        if (deprecated == null) {
+            return 0;
+        }
+        CbCategory target =
+                ensureCatalogMajor(
+                        ledger,
+                        CategoryType.EXPENSE,
+                        targetMajorName,
+                        majorSortOrder(
+                                ledger,
+                                CategoryType.EXPENSE,
+                                targetMajorName,
+                                expenseMinorToMajor(ledger)));
+
+        int changed = 0;
+        var children =
+                categoryRepo.findByBookAndCategoryTypeAndParentIdOrderBySortOrderAscNameAsc(
+                        ledger, CategoryType.EXPENSE, deprecated.getId());
+        for (CbCategory child : children) {
+            var underTarget =
+                    categoryRepo.findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                            ledger,
+                            CategoryType.EXPENSE,
+                            child.getName(),
+                            CategoryTier.MINOR,
+                            target.getId());
+            if (underTarget.isPresent()) {
+                if (!isCategoryInUse(ledger, child)) {
+                    categoryRepo.delete(child);
+                    changed++;
+                }
+            } else {
+                child.setParentId(target.getId());
+                categoryRepo.save(child);
+                changed++;
+            }
+        }
+
+        long remaining =
+                categoryRepo.countByBookAndCategoryTypeAndParentIdAndTier(
+                        ledger, CategoryType.EXPENSE, deprecated.getId(), CategoryTier.MINOR);
+        if (remaining == 0) {
+            categoryRepo.delete(deprecated);
+            changed++;
+        }
+        return changed;
     }
 
     private record CatalogGroup(String major, List<String> minors) {}
 
-    private static List<CatalogGroup> incomeCatalogGroups() {
+    private static List<CatalogGroup> incomeCatalogGroups(LedgerBook book) {
+        if (book == LedgerBook.HOUSEHOLD) {
+            return HouseholdIncomeCategoryCatalog.GROUPS.stream()
+                    .map(g -> new CatalogGroup(g.major(), g.minors()))
+                    .toList();
+        }
         return MonetaIncomeCategoryCatalog.GROUPS.stream()
                 .map(g -> new CatalogGroup(g.major(), g.minors()))
                 .toList();
     }
 
-    private static List<CatalogGroup> expenseCatalogGroups() {
+    private static Map<String, String> incomeMinorToMajor(LedgerBook book) {
+        return book == LedgerBook.HOUSEHOLD
+                ? HouseholdIncomeCategoryCatalog.minorToMajor()
+                : MonetaIncomeCategoryCatalog.minorToMajor();
+    }
+
+    private static List<CatalogGroup> expenseCatalogGroups(LedgerBook book) {
+        if (book == LedgerBook.HOUSEHOLD) {
+            return HouseholdExpenseCategoryCatalog.GROUPS.stream()
+                    .map(g -> new CatalogGroup(g.major(), g.minors()))
+                    .toList();
+        }
         return MonetaExpenseCategoryCatalog.GROUPS.stream()
                 .map(g -> new CatalogGroup(g.major(), g.minors()))
                 .toList();
+    }
+
+    private static Map<String, String> expenseMinorToMajor(LedgerBook book) {
+        return book == LedgerBook.HOUSEHOLD
+                ? HouseholdExpenseCategoryCatalog.minorToMajor()
+                : MonetaExpenseCategoryCatalog.minorToMajor();
     }
 
     private int migrateHierarchy(
@@ -413,14 +671,14 @@ public class CategoryService {
             CategoryType type,
             String minorName,
             Map<String, String> minorToMajor) {
-        if (categoryRepo.existsByBookAndCategoryTypeAndNameAndTier(
-                ledger, type, minorName, CategoryTier.MINOR)) {
-            return;
-        }
         String majorName = minorToMajor.getOrDefault(minorName, DEFAULT_MAJOR);
         CbCategory major =
                 ensureCatalogMajor(
-                        ledger, type, majorName, majorSortOrder(type, majorName, minorToMajor));
+                        ledger, type, majorName, majorSortOrder(ledger, type, majorName, minorToMajor));
+        if (categoryRepo.existsByBookAndCategoryTypeAndNameAndTierAndParentId(
+                ledger, type, minorName, CategoryTier.MINOR, major.getId())) {
+            return;
+        }
         createMinor(ledger, type, minorName, major.getId());
     }
 
@@ -428,7 +686,7 @@ public class CategoryService {
             LedgerBook ledger, CategoryType type, String majorName, int sortOrder) {
         CbCategory existing = findMajor(ledger, type, majorName);
         if (existing != null) {
-            if (existing.getSortOrder() == null || existing.getSortOrder() != sortOrder) {
+            if (existing.getSortOrder() == null) {
                 existing.setSortOrder(sortOrder);
                 categoryRepo.save(existing);
             }
@@ -452,14 +710,9 @@ public class CategoryService {
             int sortOrder,
             Set<Long> assignedMinorIds,
             Map<String, String> minorToMajor) {
-        String canonicalMajor = minorToMajor.get(minorName);
-        if (canonicalMajor != null && !canonicalMajor.equals(major.getName())) {
-            return 0;
-        }
-
         var existingMinor =
-                categoryRepo.findByBookAndCategoryTypeAndNameAndTier(
-                        ledger, type, minorName, CategoryTier.MINOR);
+                categoryRepo.findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                        ledger, type, minorName, CategoryTier.MINOR, major.getId());
         if (existingMinor.isPresent()) {
             CbCategory minor = existingMinor.get();
             boolean changed = false;
@@ -467,7 +720,7 @@ public class CategoryService {
                 minor.setParentId(major.getId());
                 changed = true;
             }
-            if (minor.getSortOrder() == null || minor.getSortOrder() != sortOrder) {
+            if (minor.getSortOrder() == null) {
                 minor.setSortOrder(sortOrder);
                 changed = true;
             }
@@ -485,8 +738,8 @@ public class CategoryService {
                         .isPresent()) {
             createMinor(ledger, type, minorName, major.getId());
             categoryRepo
-                    .findByBookAndCategoryTypeAndNameAndTier(
-                            ledger, type, minorName, CategoryTier.MINOR)
+                    .findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                            ledger, type, minorName, CategoryTier.MINOR, major.getId())
                     .ifPresent(m -> assignedMinorIds.add(m.getId()));
             return 1;
         }
@@ -520,8 +773,8 @@ public class CategoryService {
 
         createMinor(ledger, type, minorName, major.getId());
         categoryRepo
-                .findByBookAndCategoryTypeAndNameAndTier(
-                        ledger, type, minorName, CategoryTier.MINOR)
+                .findByBookAndCategoryTypeAndNameAndTierAndParentId(
+                        ledger, type, minorName, CategoryTier.MINOR, major.getId())
                 .ifPresent(m -> assignedMinorIds.add(m.getId()));
         return 1;
     }
@@ -560,7 +813,7 @@ public class CategoryService {
                 String majorName = minorToMajor.getOrDefault(row.getName(), DEFAULT_MAJOR);
                 CbCategory major =
                         ensureCatalogMajor(
-                                ledger, type, majorName, majorSortOrder(type, majorName, minorToMajor));
+                                ledger, type, majorName, majorSortOrder(ledger, type, majorName, minorToMajor));
                 row.setTier(CategoryTier.MINOR);
                 row.setParentId(major.getId());
                 categoryRepo.save(row);
@@ -571,9 +824,14 @@ public class CategoryService {
     }
 
     private int majorSortOrder(
-            CategoryType type, String majorName, Map<String, String> minorToMajor) {
+            LedgerBook ledger,
+            CategoryType type,
+            String majorName,
+            Map<String, String> minorToMajor) {
         List<CatalogGroup> groups =
-                type == CategoryType.INCOME ? incomeCatalogGroups() : expenseCatalogGroups();
+                type == CategoryType.INCOME
+                        ? incomeCatalogGroups(ledger)
+                        : expenseCatalogGroups(ledger);
         int idx = 0;
         for (CatalogGroup group : groups) {
             if (group.major().equals(majorName)) {
@@ -669,7 +927,10 @@ public class CategoryService {
         if (txType == null) {
             return Set.of();
         }
-        return new HashSet<>(txRepo.findDistinctCategoryNames(book, txType));
+        return txRepo.findDistinctCategoryIds(book, txType).stream()
+                .map(id -> categoryRepo.findByIdAndBook(id, book).map(CbCategory::getName).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
     }
 
     private boolean isCategoryInUse(LedgerBook book, CbCategory row) {
@@ -682,7 +943,12 @@ public class CategoryService {
         if (txType == null || row.getTier() != CategoryTier.MINOR) {
             return false;
         }
-        return txRepo.existsByBookAndTxTypeAndCategory(book, txType, row.getName());
+        for (Long categoryId : allMinorIdsByName(book, row.getCategoryType(), row.getName())) {
+            if (txRepo.existsByBookAndTxTypeAndCategoryId(book, txType, categoryId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private CbCategory requireMajor(LedgerBook book, Long parentId, CategoryType type) {
@@ -761,21 +1027,17 @@ public class CategoryService {
             LedgerBook book, CategoryType type, String oldName, String newName) {
         switch (type) {
             case EXPENSE -> {
-                txRepo.renameCategory(book, TxType.EXPENSE, oldName, newName);
                 fixedRepo.renameCategory(book, TxType.EXPENSE, oldName, newName);
                 keywordRepo.renameCategoryName(book, TxType.EXPENSE, oldName, newName);
             }
             case INCOME -> {
-                txRepo.renameCategory(book, TxType.INCOME, oldName, newName);
                 fixedRepo.renameCategory(book, TxType.INCOME, oldName, newName);
                 keywordRepo.renameCategoryName(book, TxType.INCOME, oldName, newName);
             }
             case SAVINGS -> {
-                txRepo.renameTitle(book, TxType.SAVINGS, oldName, newName, null);
                 fixedRepo.renameTitle(book, TxType.SAVINGS, oldName, newName);
             }
             case INSURANCE -> {
-                txRepo.renameTitle(book, TxType.SAVINGS, oldName, newName, "보험");
                 fixedRepo.renameTitle(book, TxType.SAVINGS, oldName, newName);
             }
         }

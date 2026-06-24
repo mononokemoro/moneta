@@ -586,9 +586,10 @@
   --xl-focus-bg: #243041;
   /* 공통 열 너비 (지출·수입·저축 정렬) */
   --cb-col-check: 28px;
-  --cb-col-title: 26%;
-  --cb-col-amount: 12%;
-  --cb-col-category: 14%;
+  --cb-col-title: 22%;
+  --cb-col-household-category: 12%;
+  --cb-col-amount: 11%;
+  --cb-col-category: 12%;
   --cb-col-card: 12%;
   --cb-col-accumulated: var(--cb-col-category);
   --cb-table-visible-rows: 6;
@@ -686,6 +687,10 @@
   background: var(--xl-focus-bg);
 }
 
+.cb-panel--excel .cb-cell--computed {
+  background: color-mix(in srgb, var(--xl-surface, #fff) 94%, #8aa4c0 6%);
+}
+
 .cb-panel--excel .cb-table--inline.cb-table--excel .cb-cell.cb-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -712,6 +717,10 @@
 
 .cb-panel--excel .cb-col-title {
   width: var(--cb-col-title);
+}
+
+.cb-panel--excel .cb-col-household-category {
+  width: var(--cb-col-household-category);
 }
 
 .cb-panel--excel .cb-col-amount {
@@ -1030,4 +1039,86 @@
 .cb-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.cb-modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 14, 24, 0.55);
+  padding: 16px;
+}
+
+.cb-modal {
+  width: min(360px, 100%);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #2d415f;
+  background: #152235;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.cb-modal__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #4f7fd6, #3d6fc8);
+}
+
+.cb-modal__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cb-modal__hdrDate {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+
+.cb-modal__body {
+  padding: 14px;
+}
+
+.cb-modal__hint {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: #9eb4d0;
+}
+
+.cb-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cb-modal__label {
+  font-size: 10px;
+  color: #8ea1bc;
+}
+
+.cb-modal__date {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #314764;
+  background: rgba(12, 22, 36, 0.9);
+  color: #d8e6f8;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.cb-modal__actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px 14px;
 }

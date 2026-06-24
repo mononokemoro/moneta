@@ -9,6 +9,18 @@
   box-sizing: border-box;
 }
 
+.cb-shell--data-popup {
+  height: 100vh;
+  min-height: 100vh;
+  background: var(--surface-0, #f4f6f8);
+}
+
+.cb-data-layout--popup {
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+  padding: 8px;
+}
+
 .cb-data {
   min-width: 0;
   min-height: 0;

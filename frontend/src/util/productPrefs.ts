@@ -24,6 +24,8 @@ export interface SavingsProduct {
   joinDate: string;
   maturityDate: string;
   autoTransferDay: string;
+  openingBalance: string;
+  openingDate: string;
   status: SavingsStatus;
 }
 
@@ -35,6 +37,8 @@ export interface InsuranceProduct {
   joinDate: string;
   maturityDate: string;
   transferDay: string;
+  openingBalance: string;
+  openingDate: string;
   status: InsuranceStatus;
 }
 
@@ -53,10 +57,8 @@ export interface CardProduct {
   classification: string;
   name: string;
   paymentDay: string;
-  periodStartMonth: string;
-  periodStartDay: string;
-  periodEndMonth: string;
-  periodEndDay: string;
+  usageStartDate: string;
+  cancelDate: string;
   limit: string;
   status: CardStatus;
 }
@@ -76,6 +78,16 @@ function rowId(id: number | null) {
   return id != null ? String(id) : newId();
 }
 
+function apiRowId(id: string): number | null {
+  const n = Number(id);
+  return Number.isFinite(n) && id.trim() !== "" ? n : null;
+}
+
+function openingBalanceInput(value: number | undefined): string {
+  if (value == null || value === 0) return "";
+  return String(value);
+}
+
 function toSavings(row: FinancialProduct): SavingsProduct {
   return {
     id: rowId(row.id),
@@ -84,6 +96,8 @@ function toSavings(row: FinancialProduct): SavingsProduct {
     joinDate: row.joinDate,
     maturityDate: row.maturityDate,
     autoTransferDay: row.autoTransferDay,
+    openingBalance: openingBalanceInput(row.openingBalance),
+    openingDate: row.openingDate ?? "",
     status: savingsStatusFromApi(row.status),
   };
 }
@@ -97,6 +111,8 @@ function toInsurance(row: FinancialProduct): InsuranceProduct {
     joinDate: row.joinDate,
     maturityDate: row.maturityDate,
     transferDay: row.transferDay,
+    openingBalance: openingBalanceInput(row.openingBalance),
+    openingDate: row.openingDate ?? "",
     status: savingsStatusFromApi(row.status) as InsuranceStatus,
   };
 }
@@ -113,24 +129,35 @@ function toLoan(row: FinancialProduct): LoanProduct {
   };
 }
 
+/** API·입력 공통 YYYYMMDD (빈 값 허용) */
+export function normalizeYmdDate(value: string): string {
+  return value.replace(/\D/g, "").slice(0, 8);
+}
+
+export function todayYmd(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
+}
+
 function toCard(row: FinancialProduct): CardProduct {
   return {
     id: rowId(row.id),
     classification: row.classification,
     name: row.name,
-    paymentDay: row.paymentDay,
-    periodStartMonth: row.periodStartMonth,
-    periodStartDay: row.periodStartDay,
-    periodEndMonth: row.periodEndMonth,
-    periodEndDay: row.periodEndDay,
-    limit: row.cardLimit,
+    paymentDay: normalizeCardDay(row.paymentDay),
+    usageStartDate: normalizeYmdDate(row.joinDate),
+    cancelDate: normalizeYmdDate(row.maturityDate),
+    limit: "",
     status: cardStatusFromApi(row.status),
   };
 }
 
 function fromSavings(row: SavingsProduct, sortOrder: number): FinancialProduct {
   return {
-    id: null,
+    id: apiRowId(row.id),
     productType: "SAVINGS",
     status: savingsStatusToApi(row.status),
     sortOrder,
@@ -150,12 +177,14 @@ function fromSavings(row: SavingsProduct, sortOrder: number): FinancialProduct {
     periodEndDay: "",
     principal: "",
     cardLimit: "",
+    openingBalance: Number(row.openingBalance.replace(/,/g, "")) || 0,
+    openingDate: normalizeYmdDate(row.openingDate),
   };
 }
 
 function fromInsurance(row: InsuranceProduct, sortOrder: number): FinancialProduct {
   return {
-    id: null,
+    id: apiRowId(row.id),
     productType: "INSURANCE",
     status: savingsStatusToApi(row.status),
     sortOrder,
@@ -175,6 +204,8 @@ function fromInsurance(row: InsuranceProduct, sortOrder: number): FinancialProdu
     periodEndDay: "",
     principal: "",
     cardLimit: "",
+    openingBalance: Number(row.openingBalance.replace(/,/g, "")) || 0,
+    openingDate: normalizeYmdDate(row.openingDate),
   };
 }
 
@@ -200,6 +231,8 @@ function fromLoan(row: LoanProduct, sortOrder: number): FinancialProduct {
     periodEndDay: "",
     principal: row.principal,
     cardLimit: "",
+    openingBalance: 0,
+    openingDate: "",
   };
 }
 
@@ -212,19 +245,21 @@ function fromCard(row: CardProduct, sortOrder: number): FinancialProduct {
     classification: row.classification,
     name: row.name,
     paymentMethod: "",
-    joinDate: "",
-    maturityDate: "",
+    joinDate: normalizeYmdDate(row.usageStartDate),
+    maturityDate: normalizeYmdDate(row.cancelDate),
     startDate: "",
     autoTransferDay: "",
     transferDay: "",
     repaymentDay: "",
-    paymentDay: row.paymentDay,
-    periodStartMonth: row.periodStartMonth,
-    periodStartDay: row.periodStartDay,
-    periodEndMonth: row.periodEndMonth,
-    periodEndDay: row.periodEndDay,
+    paymentDay: normalizeCardDay(row.paymentDay),
+    periodStartMonth: "",
+    periodStartDay: "",
+    periodEndMonth: "",
+    periodEndDay: "",
     principal: "",
-    cardLimit: row.limit,
+    cardLimit: "",
+    openingBalance: 0,
+    openingDate: "",
   };
 }
 
@@ -271,6 +306,8 @@ export function createSavingsRow(): SavingsProduct {
     joinDate: "",
     maturityDate: "",
     autoTransferDay: "",
+    openingBalance: "",
+    openingDate: "",
     status: "active",
   };
 }
@@ -284,6 +321,8 @@ export function createInsuranceRow(): InsuranceProduct {
     joinDate: "",
     maturityDate: "",
     transferDay: "15",
+    openingBalance: "",
+    openingDate: "",
     status: "active",
   };
 }
@@ -306,11 +345,9 @@ export function createCardRow(classification = "신용카드"): CardProduct {
     id: newId(),
     classification,
     name: "",
-    paymentDay: isCredit ? "13" : "01",
-    periodStartMonth: isCredit ? "전월" : "당월",
-    periodStartDay: isCredit ? "01" : "",
-    periodEndMonth: isCredit ? "전월" : "당월",
-    periodEndDay: isCredit ? "31" : "",
+    paymentDay: isCredit ? "13" : "1",
+    usageStartDate: "",
+    cancelDate: "",
     limit: "",
     status: "active",
   };
@@ -320,4 +357,11 @@ export const SAVINGS_CLASSES = ["예금", "적금", "청약저축", "주식/투�
 export const INSURANCE_CLASSES = ["보장성보험", "저축성보험", "기타"];
 export const INSURANCE_PAYMENTS = ["현금", "카드", "계좌이체"];
 export const CARD_CLASSES = ["신용카드", "체크카드", "기타"];
-export const MONTH_OPTIONS = ["전월", "당월"];
+
+/** 카드 결제일·기간 일자 — 숫자만 저장 (1~31) */
+export function normalizeCardDay(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  const n = Math.min(31, Math.max(1, parseInt(digits, 10)));
+  return String(n);
+}

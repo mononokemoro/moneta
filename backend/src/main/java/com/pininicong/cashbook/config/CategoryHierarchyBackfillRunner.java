@@ -33,11 +33,9 @@ public class CategoryHierarchyBackfillRunner implements ApplicationRunner {
             if (income > 0) {
                 log.info("{} 장부 수입 분류 계층 정리 {}건", book.label(), income);
             }
-            if (book == LedgerBook.PERSONAL) {
-                int expense = categoryService.migrateExpenseHierarchy(book);
-                if (expense > 0) {
-                    log.info("{} 장부 지출 분류 계층 정리 {}건", book.label(), expense);
-                }
+            int expense = categoryService.migrateExpenseHierarchy(book);
+            if (expense > 0) {
+                log.info("{} 장부 지출 분류 계층 정리 {}건", book.label(), expense);
             }
         }
     }

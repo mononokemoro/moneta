@@ -52,10 +52,21 @@ public class ReportService {
 
     private final CbTransactionRepository txRepo;
     private final CbMonthlyBudgetRepository budgetRepo;
+    private final TransactionCategorySupport categorySupport;
+    private final TransactionCardSupport cardSupport;
+    private final ProductPeriodSummaryService periodSummaryService;
 
-    public ReportService(CbTransactionRepository txRepo, CbMonthlyBudgetRepository budgetRepo) {
+    public ReportService(
+            CbTransactionRepository txRepo,
+            CbMonthlyBudgetRepository budgetRepo,
+            TransactionCategorySupport categorySupport,
+            TransactionCardSupport cardSupport,
+            ProductPeriodSummaryService periodSummaryService) {
         this.txRepo = txRepo;
         this.budgetRepo = budgetRepo;
+        this.categorySupport = categorySupport;
+        this.cardSupport = cardSupport;
+        this.periodSummaryService = periodSummaryService;
     }
 
     public MonthlyReportResponse buildMonthlyLegacy(int year, ReportPeriod period, LedgerBook book) {
@@ -95,6 +106,9 @@ public class ReportService {
         }
 
         List<TimeBucket> buckets = bucketsFor(start, end, g);
+        if ("SAVINGS_INSURANCE".equals(category)) {
+            refreshSavingsPeriodSummaries(ledger, start, end);
+        }
         List<MonthColumnDto> columns = toColumns(buckets, g);
         List<ReportRowDto> rows = matrixRows(category, subView, buckets, txs);
         List<ChartPointDto> trend = trendFromRows(rows, buckets, primaryTrendKey(category, subView));
@@ -285,10 +299,10 @@ public class ReportService {
                     cardTxs.stream()
                             .collect(
                                     Collectors.groupingBy(
-                                            t ->
-                                                    isBlank(t.getCardName())
-                                                            ? "(미지정)"
-                                                            : t.getCardName(),
+                                            t -> {
+                                                String cn = cardName(t);
+                                                return isBlank(cn) ? "(미지정)" : cn;
+                                            },
                                             LinkedHashMap::new,
                                             Collectors.toList()));
             List<ReportRowDto> rows = new ArrayList<>();
@@ -591,7 +605,7 @@ public class ReportService {
                 txTypeLabel(t.getTxType()),
                 t.getTitle(),
                 cat(t),
-                t.getCardName() != null ? t.getCardName() : "",
+                cardName(t),
                 toLong(n(t.getAmount())),
                 t.getRemarks() != null ? t.getRemarks() : "");
     }
@@ -636,9 +650,14 @@ public class ReportService {
 
     private boolean isCardExpense(CbTransaction t) {
         if (t.getTxType() != TxType.EXPENSE) return false;
-        if (t.getCardName() != null && !t.getCardName().isBlank()) return true;
+        if (t.getCardProductId() != null) return true;
         String c = cat(t);
         return c.contains("신용") || c.contains("체크") || c.contains("카드");
+    }
+
+    private String cardName(CbTransaction t) {
+        LedgerBook book = t.getBook() != null ? t.getBook() : LedgerBook.PERSONAL;
+        return cardSupport.name(book, t.getCardProductId());
     }
 
     private String primaryTrendKey(String category, String subView) {
@@ -692,6 +711,7 @@ public class ReportService {
         }
         if ("SAVINGS_INSURANCE".equals(category)) {
             notes.add("저축/보험은 「저축」 거래 중 분류에 「보험」 포함 여부로 구분합니다.");
+            notes.add("월말 잔액은 불입/인출 + 개설잔액 + 잔액 확인(기준점)으로 계산됩니다.");
         }
         if ("LOAN".equals(category) || "ALL".equals(category)) {
             notes.add("대출은 「지출」 거래 중 분류에 「대출」이 포함된 것입니다.");
@@ -711,6 +731,15 @@ public class ReportService {
 
     private boolean isCalendar(String category) {
         return "CALENDAR".equals(category);
+    }
+
+    private void refreshSavingsPeriodSummaries(LedgerBook ledger, LocalDate start, LocalDate end) {
+        YearMonth cursor = YearMonth.from(start);
+        YearMonth last = YearMonth.from(end);
+        while (!cursor.isAfter(last)) {
+            periodSummaryService.refreshMonth(ledger, cursor);
+            cursor = cursor.plusMonths(1);
+        }
     }
 
     private ReportGranularity resolveGranularity(
@@ -769,8 +798,8 @@ public class ReportService {
         };
     }
 
-    private static String cat(CbTransaction t) {
-        return t.getCategory() != null ? t.getCategory() : "";
+    private String cat(CbTransaction t) {
+        return categorySupport.name(t.getBook(), t.getCategoryId());
     }
 
     private static boolean containsInsurance(String category) {

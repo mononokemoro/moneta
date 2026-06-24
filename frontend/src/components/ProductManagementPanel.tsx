@@ -9,8 +9,10 @@ import {
   INSURANCE_CLASSES,
   INSURANCE_PAYMENTS,
   loadProductStore,
-  MONTH_OPTIONS,
+  normalizeCardDay,
+  normalizeYmdDate,
   saveProductStore,
+  todayYmd,
   syncCardsFromTransactions,
   SAVINGS_CLASSES,
   type CardProduct,
@@ -46,26 +48,33 @@ function toggleCheck(set: Set<string>, id: string): Set<string> {
   return next;
 }
 
+const TABLE_CLS = "cb-table cb-table--inline cb-table--excel cb-table--product";
+const CARD_TABLE_CLS = `${TABLE_CLS} cb-table--card`;
+
 function cellInput(
   value: string,
   onChange: (v: string) => void,
-  opts?: { width?: string; placeholder?: string; disabled?: boolean }
+  opts?: { compact?: boolean; placeholder?: string; disabled?: boolean }
 ) {
   return (
     <input
-      className="cb-prod__cell"
+      className={opts?.compact ? "cb-cell cb-prod__cellCompact" : "cb-cell"}
       value={value}
       placeholder={opts?.placeholder}
       disabled={opts?.disabled}
-      style={opts?.width ? { width: opts.width } : undefined}
       onChange={(e) => onChange(e.target.value)}
     />
   );
 }
 
-function cellSelect(value: string, options: string[], onChange: (v: string) => void, disabled?: boolean) {
+function cellSelect(value: string, options: string[], onChange: (v: string) => void, disabled?: boolean, compact?: boolean) {
   return (
-    <select className="cb-prod__cell" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+    <select
+      className={compact ? "cb-cell cb-prod__cellCompact" : "cb-cell"}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    >
       {options.map((o) => (
         <option key={o} value={o}>
           {o}
@@ -230,9 +239,17 @@ export function ProductManagementPanel({ book }: Props) {
     } else {
       persist({
         ...store,
-        cards: store.cards.map((r) =>
-          ids.includes(r.id) ? { ...r, status: target as CardStatus } : r
-        ),
+        cards: store.cards.map((r) => {
+          if (!ids.includes(r.id)) return r;
+          const status = target as CardStatus;
+          if (status === "cancelled") {
+            return { ...r, status, cancelDate: r.cancelDate || todayYmd() };
+          }
+          if (status === "active") {
+            return { ...r, status, cancelDate: "" };
+          }
+          return { ...r, status };
+        }),
       });
     }
     setChecked(new Set());
@@ -398,8 +415,8 @@ export function ProductManagementPanel({ book }: Props) {
     }
     return (
       <MonetaHint>
-        분류와 카드명은 필수 입력항목 (신용카드/기타를 선택한 경우 결제일은 결산시작일로, 사용기간은
-        결산기간으로 자동설정). 「내역에서 가져오기」로 지출 내역의 카드명을 일괄 등록할 수 있습니다.
+        분류와 카드명은 필수 입력항목입니다. 사용 시작·해지일은 20260101 형태로 입력해 주세요. 「내역에서
+        가져오기」로 지출 내역의 카드명을 일괄 등록할 수 있습니다.
       </MonetaHint>
     );
   }
@@ -407,10 +424,10 @@ export function ProductManagementPanel({ book }: Props) {
   function renderSavingsTable() {
     const rows = store.savings.filter((r) => r.status === savingsSub);
     return (
-      <table className="cb-prod__table">
+      <table className={TABLE_CLS}>
         <thead>
           <tr>
-            <th className="cb-prod__colCheck" />
+            <th className="cb-col-check" />
             <th>
               분류 <span className="cb-prod__req">*</span>
             </th>
@@ -419,6 +436,8 @@ export function ProductManagementPanel({ book }: Props) {
             </th>
             <th>가입일</th>
             <th>만기일</th>
+            <th>개설잔액</th>
+            <th>기준일</th>
             <th>자동이체일</th>
           </tr>
         </thead>
@@ -439,10 +458,12 @@ export function ProductManagementPanel({ book }: Props) {
               </td>
               <td>{cellSelect(row.classification, SAVINGS_CLASSES, (v) => updateSavings(row.id, { classification: v }))}</td>
               <td>{cellInput(row.name, (v) => updateSavings(row.id, { name: v }))}</td>
-              <td>{cellInput(row.joinDate, (v) => updateSavings(row.id, { joinDate: v }), { width: "72px" })}</td>
-              <td>{cellInput(row.maturityDate, (v) => updateSavings(row.id, { maturityDate: v }), { width: "72px" })}</td>
+              <td>{cellInput(row.joinDate, (v) => updateSavings(row.id, { joinDate: v }))}</td>
+              <td>{cellInput(row.maturityDate, (v) => updateSavings(row.id, { maturityDate: v }))}</td>
+              <td>{cellInput(row.openingBalance, (v) => updateSavings(row.id, { openingBalance: v }))}</td>
+              <td>{cellInput(row.openingDate, (v) => updateSavings(row.id, { openingDate: v }), { placeholder: "YYYYMMDD" })}</td>
               <td className="cb-prod__dayCell">
-                {cellInput(row.autoTransferDay, (v) => updateSavings(row.id, { autoTransferDay: v }), { width: "28px" })}
+                {cellInput(row.autoTransferDay, (v) => updateSavings(row.id, { autoTransferDay: v }), { compact: true })}
                 <span>일</span>
               </td>
             </tr>
@@ -455,10 +476,10 @@ export function ProductManagementPanel({ book }: Props) {
   function renderInsuranceTable() {
     const rows = store.insurance.filter((r) => r.status === insuranceSub);
     return (
-      <table className="cb-prod__table">
+      <table className={TABLE_CLS}>
         <thead>
           <tr>
-            <th className="cb-prod__colCheck" />
+            <th className="cb-col-check" />
             <th>
               분류 <span className="cb-prod__req">*</span>
             </th>
@@ -468,6 +489,8 @@ export function ProductManagementPanel({ book }: Props) {
             <th>결제방법</th>
             <th>가입일</th>
             <th>만기일</th>
+            <th>개설잔액</th>
+            <th>기준일</th>
             <th>이체일</th>
           </tr>
         </thead>
@@ -489,10 +512,12 @@ export function ProductManagementPanel({ book }: Props) {
               <td>{cellSelect(row.classification, INSURANCE_CLASSES, (v) => updateInsurance(row.id, { classification: v }))}</td>
               <td>{cellInput(row.name, (v) => updateInsurance(row.id, { name: v }))}</td>
               <td>{cellSelect(row.paymentMethod, INSURANCE_PAYMENTS, (v) => updateInsurance(row.id, { paymentMethod: v }))}</td>
-              <td>{cellInput(row.joinDate, (v) => updateInsurance(row.id, { joinDate: v }), { width: "72px" })}</td>
-              <td>{cellInput(row.maturityDate, (v) => updateInsurance(row.id, { maturityDate: v }), { width: "72px" })}</td>
+              <td>{cellInput(row.joinDate, (v) => updateInsurance(row.id, { joinDate: v }))}</td>
+              <td>{cellInput(row.maturityDate, (v) => updateInsurance(row.id, { maturityDate: v }))}</td>
+              <td>{cellInput(row.openingBalance, (v) => updateInsurance(row.id, { openingBalance: v }))}</td>
+              <td>{cellInput(row.openingDate, (v) => updateInsurance(row.id, { openingDate: v }), { placeholder: "YYYYMMDD" })}</td>
               <td className="cb-prod__dayCell">
-                {cellInput(row.transferDay, (v) => updateInsurance(row.id, { transferDay: v }), { width: "28px" })}
+                {cellInput(row.transferDay, (v) => updateInsurance(row.id, { transferDay: v }), { compact: true })}
                 <span>일</span>
               </td>
             </tr>
@@ -505,10 +530,10 @@ export function ProductManagementPanel({ book }: Props) {
   function renderLoanTable() {
     const rows = store.loans.filter((r) => r.status === loanSub);
     return (
-      <table className="cb-prod__table">
+      <table className={TABLE_CLS}>
         <thead>
           <tr>
-            <th className="cb-prod__colCheck" />
+            <th className="cb-col-check" />
             <th>
               대출명 <span className="cb-prod__req">*</span>
             </th>
@@ -534,11 +559,11 @@ export function ProductManagementPanel({ book }: Props) {
                 />
               </td>
               <td>{cellInput(row.name, (v) => updateLoan(row.id, { name: v }))}</td>
-              <td>{cellInput(row.principal, (v) => updateLoan(row.id, { principal: v }), { width: "80px" })}</td>
-              <td>{cellInput(row.startDate, (v) => updateLoan(row.id, { startDate: v }), { width: "72px" })}</td>
-              <td>{cellInput(row.maturityDate, (v) => updateLoan(row.id, { maturityDate: v }), { width: "72px" })}</td>
+              <td>{cellInput(row.principal, (v) => updateLoan(row.id, { principal: v }))}</td>
+              <td>{cellInput(row.startDate, (v) => updateLoan(row.id, { startDate: v }))}</td>
+              <td>{cellInput(row.maturityDate, (v) => updateLoan(row.id, { maturityDate: v }))}</td>
               <td className="cb-prod__dayCell">
-                {cellInput(row.repaymentDay, (v) => updateLoan(row.id, { repaymentDay: v }), { width: "28px" })}
+                {cellInput(row.repaymentDay, (v) => updateLoan(row.id, { repaymentDay: v }), { compact: true })}
                 <span>일</span>
               </td>
             </tr>
@@ -551,23 +576,27 @@ export function ProductManagementPanel({ book }: Props) {
   function renderCardTable() {
     const rows = store.cards.filter((r) => r.status === cardSub);
     return (
-      <table className="cb-prod__table">
+      <table className={CARD_TABLE_CLS}>
+        <colgroup>
+          <col className="cb-col-check" />
+          <col className="cb-prod__col-class" />
+          <col className="cb-prod__col-cardName" />
+          <col className="cb-prod__col-payDay" />
+          <col className="cb-prod__col-date" />
+          <col className="cb-prod__col-date" />
+        </colgroup>
         <thead>
           <tr>
-            <th className="cb-prod__colCheck" rowSpan={2} />
-            <th rowSpan={2}>
+            <th className="cb-col-check" />
+            <th>
               분류 <span className="cb-prod__req">*</span>
             </th>
-            <th rowSpan={2}>
+            <th>
               카드명 <span className="cb-prod__req">*</span>
             </th>
-            <th rowSpan={2}>결제일</th>
-            <th colSpan={2}>카드사용기간</th>
-            <th rowSpan={2}>카드한도</th>
-          </tr>
-          <tr>
-            <th>시작일</th>
-            <th>마지막일</th>
+            <th>결제일</th>
+            <th>사용 시작</th>
+            <th>해지일</th>
           </tr>
         </thead>
         <tbody>
@@ -593,44 +622,34 @@ export function ProductManagementPanel({ book }: Props) {
                     updateCard(row.id, {
                       classification: v,
                       paymentDay: patch.paymentDay,
-                      periodStartMonth: patch.periodStartMonth,
-                      periodStartDay: patch.periodStartDay,
-                      periodEndMonth: patch.periodEndMonth,
-                      periodEndDay: patch.periodEndDay,
                     });
                   })}
                 </td>
                 <td>{cellInput(row.name, (v) => updateCard(row.id, { name: v }))}</td>
                 <td className="cb-prod__dayCell">
-                  {cellSelect(
-                    row.paymentDay,
-                    Array.from({ length: 28 }, (_, i) => String(i + 1).padStart(2, "0")),
-                    (v) => updateCard(row.id, { paymentDay: v }),
-                    isCheck
-                  )}
-                  <span>일</span>
+                  <span className="cb-prod__inlineCell">
+                    {cellInput(
+                      row.paymentDay,
+                      (v) => updateCard(row.id, { paymentDay: normalizeCardDay(v) }),
+                      { compact: true, disabled: isCheck }
+                    )}
+                    <span>일</span>
+                  </span>
                 </td>
-                <td className="cb-prod__periodCell">
-                  {cellSelect(row.periodStartMonth, MONTH_OPTIONS, (v) => updateCard(row.id, { periodStartMonth: v }), isCheck)}
-                  {cellSelect(
-                    row.periodStartDay,
-                    Array.from({ length: 28 }, (_, i) => String(i + 1).padStart(2, "0")),
-                    (v) => updateCard(row.id, { periodStartDay: v }),
-                    isCheck
+                <td>
+                  {cellInput(
+                    row.usageStartDate,
+                    (v) => updateCard(row.id, { usageStartDate: normalizeYmdDate(v) }),
+                    { placeholder: "YYYYMMDD" }
                   )}
-                  <span>일</span>
                 </td>
-                <td className="cb-prod__periodCell">
-                  {cellSelect(row.periodEndMonth, MONTH_OPTIONS, (v) => updateCard(row.id, { periodEndMonth: v }), isCheck)}
-                  {cellSelect(
-                    row.periodEndDay,
-                    Array.from({ length: 28 }, (_, i) => String(i + 1).padStart(2, "0")),
-                    (v) => updateCard(row.id, { periodEndDay: v }),
-                    isCheck
+                <td>
+                  {cellInput(
+                    row.cancelDate,
+                    (v) => updateCard(row.id, { cancelDate: normalizeYmdDate(v) }),
+                    { placeholder: "YYYYMMDD", disabled: cardSub === "active" }
                   )}
-                  <span>일</span>
                 </td>
-                <td>{cellInput(row.limit, (v) => updateCard(row.id, { limit: v }), { width: "72px", disabled: isCheck })}</td>
               </tr>
             );
           })}
@@ -757,7 +776,11 @@ export function ProductManagementPanel({ book }: Props) {
       {loading ? <p className="cb-muted">불러오는 중…</p> : null}
       {!loading ? (
         <div className="cb-catmgmt__stack">
-          <div className="cb-prod__tablewrap">{renderTable()}</div>
+          <div className="cb-panel cb-panel--excel cb-prod__panel">
+            <div className="cb-panel__tablewrap">
+              <div className="cb-panel__tablescroll">{renderTable()}</div>
+            </div>
+          </div>
           {renderToolbar()}
         </div>
       ) : null}

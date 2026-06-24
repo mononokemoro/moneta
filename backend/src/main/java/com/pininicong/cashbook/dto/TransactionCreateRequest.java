@@ -12,9 +12,14 @@ public record TransactionCreateRequest(
         @NotNull TxType txType,
         String title,
         @NotNull BigDecimal amount,
+        Long categoryId,
         String category,
+        Long cardProductId,
         String cardName,
+        Long savingsProductId,
         String remarks,
         BigDecimal accumulatedAmount,
         LedgerBook book,
-        ExpenseScope expenseScope) {}
+        ExpenseScope expenseScope,
+        Long householdCategoryId,
+        String householdCategory) {}

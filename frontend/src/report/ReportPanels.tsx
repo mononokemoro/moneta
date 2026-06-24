@@ -1,5 +1,6 @@
 import { formatMoney } from "../formatMoney";
 import type { ReportData } from "../api/report";
+import { formatDisplayDate } from "../util/dateUtil";
 
 type Props = { data: ReportData };
 
@@ -58,7 +59,7 @@ export function ReportDetail({ data }: Props) {
         <tbody>
           {data.details.map((d, i) => (
             <tr key={`${d.date}-${d.title}-${i}`}>
-              <td>{d.date}</td>
+              <td>{formatDisplayDate(d.date)}</td>
               <td>{d.txType}</td>
               <td>{d.title}</td>
               <td>{d.category}</td>

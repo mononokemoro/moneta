@@ -18,6 +18,7 @@ import { formatMoney } from "../formatMoney";
 import { amountToInput, formatAmountInput, parseAmount } from "../util/parseAmount";
 import { confirmDelete } from "../util/confirmDialog";
 import { CategoryPicker } from "./CategoryPicker";
+import { CompactDateInput } from "./CompactDateInput";
 import { ComboInput } from "./ComboInput";
 import { MonetaHint, MonetaSubNav } from "./MonetaPanel";
 import { SettingsSectionToolbar } from "./SettingsSectionToolbar";
@@ -294,6 +295,318 @@ export function FixedRegistrationPanel({ book, categories }: Props) {
       <span className="cb-fixedreg__static">매일</span>
     );
 
+  const dayCell = (
+    <div className="cb-fixedreg__dayCell">
+      {daySelect}
+      {scheduleTab === "MONTHLY" && (
+        <select
+          className="cb-fixedreg__cell cb-fixedreg__cell--holiday"
+          value={form.holidayAdjust}
+          disabled={busy}
+          onChange={(e) => patchForm({ holidayAdjust: e.target.value as FixedHolidayAdjust })}
+        >
+          {HOLIDAY_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+
+  const periodCell = (
+    <div className="cb-fixedreg__periodCell">
+      <select
+        className="cb-fixedreg__cell"
+        value={form.periodType}
+        disabled={busy}
+        onChange={(e) => patchForm({ periodType: e.target.value as FixedPeriodType })}
+      >
+        {PERIOD_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {form.periodType === "RANGE" && (
+        <div className="cb-fixedreg__periodRange">
+          <CompactDateInput
+            className="cb-fixedreg__cell"
+            value={form.periodStart}
+            disabled={busy}
+            onChange={(iso) => patchForm({ periodStart: iso })}
+          />
+          <span className="cb-fixedreg__periodSep">~</span>
+          <CompactDateInput
+            className="cb-fixedreg__cell"
+            value={form.periodEnd}
+            disabled={busy}
+            onChange={(iso) => patchForm({ periodEnd: iso })}
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  function renderFormTable() {
+    if (mainTab === "INCOME") {
+      return (
+        <table className="cb-fixedreg__table">
+          <colgroup>
+            <col className="cb-fixedreg__col-day" />
+            <col className="cb-fixedreg__col-category" />
+            <col className="cb-fixedreg__col-title" />
+            <col className="cb-fixedreg__col-amount" />
+            <col className="cb-fixedreg__col-period" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>일자 및 휴일체크 *</th>
+              <th>분류 +</th>
+              <th>수입내역 *</th>
+              <th className="cb-num">금액</th>
+              <th>고정기간</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{dayCell}</td>
+              <td>
+                <CategoryPicker
+                  className="cb-fixedreg__cell"
+                  groups={incomeGroups}
+                  value={form.category}
+                  onChange={(v) => patchForm({ category: v })}
+                  disabled={busy}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell"
+                  value={form.title}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ title: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell cb-num"
+                  value={form.defaultAmount}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
+                />
+              </td>
+              <td>{periodCell}</td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    if (mainTab === "SAVINGS") {
+      return (
+        <table className="cb-fixedreg__table">
+          <colgroup>
+            <col className="cb-fixedreg__col-day" />
+            <col className="cb-fixedreg__col-kind" />
+            <col className="cb-fixedreg__col-title" />
+            <col className="cb-fixedreg__col-amount" />
+            <col className="cb-fixedreg__col-remarks" />
+            <col className="cb-fixedreg__col-period" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>일자 및 휴일체크 *</th>
+              <th>구분</th>
+              <th>저축/보험명 *</th>
+              <th className="cb-num">금액</th>
+              <th>비고</th>
+              <th>고정기간</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{dayCell}</td>
+              <td>
+                <select
+                  className="cb-fixedreg__cell"
+                  value={form.subCategory}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ subCategory: e.target.value })}
+                >
+                  {SAVINGS_CLASSES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              <td>
+                <ComboInput
+                  className="cb-fixedreg__cell"
+                  options={nameOptions}
+                  value={form.title}
+                  onChange={(v) => patchForm({ title: v })}
+                  disabled={busy}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell cb-num"
+                  value={form.defaultAmount}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell"
+                  value={form.remarks}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ remarks: e.target.value })}
+                />
+              </td>
+              <td>{periodCell}</td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    if (mainTab === "LOAN") {
+      return (
+        <table className="cb-fixedreg__table">
+          <colgroup>
+            <col className="cb-fixedreg__col-day" />
+            <col className="cb-fixedreg__col-title" />
+            <col className="cb-fixedreg__col-amount" />
+            <col className="cb-fixedreg__col-amount" />
+            <col className="cb-fixedreg__col-remarks" />
+            <col className="cb-fixedreg__col-period" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>일자 및 휴일체크 *</th>
+              <th>대출명 *</th>
+              <th className="cb-num">상환원금</th>
+              <th className="cb-num">상환이자</th>
+              <th>비고</th>
+              <th>고정기간</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{dayCell}</td>
+              <td>
+                <ComboInput
+                  className="cb-fixedreg__cell"
+                  options={nameOptions}
+                  value={form.title}
+                  onChange={(v) => patchForm({ title: v })}
+                  disabled={busy}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell cb-num"
+                  value={form.defaultAmount}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell cb-num"
+                  value={form.interestAmount}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ interestAmount: formatAmountInput(e.target.value) })}
+                />
+              </td>
+              <td>
+                <input
+                  className="cb-fixedreg__cell"
+                  value={form.remarks}
+                  disabled={busy}
+                  onChange={(e) => patchForm({ remarks: e.target.value })}
+                />
+              </td>
+              <td>{periodCell}</td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    return (
+      <table className="cb-fixedreg__table">
+        <colgroup>
+          <col className="cb-fixedreg__col-day" />
+          <col className="cb-fixedreg__col-category" />
+          <col className="cb-fixedreg__col-title" />
+          <col className="cb-fixedreg__col-amount" />
+          <col className="cb-fixedreg__col-pay" />
+          <col className="cb-fixedreg__col-period" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>일자 및 휴일체크 *</th>
+            <th>분류</th>
+            <th>지출내역 *</th>
+            <th className="cb-num">금액</th>
+            <th>현금/카드</th>
+            <th>고정기간</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{dayCell}</td>
+            <td>
+              <CategoryPicker
+                className="cb-fixedreg__cell"
+                groups={expenseGroups}
+                value={form.category}
+                onChange={(v) => patchForm({ category: v })}
+                disabled={busy}
+              />
+            </td>
+            <td>
+              <input
+                className="cb-fixedreg__cell"
+                value={form.title}
+                disabled={busy}
+                onChange={(e) => patchForm({ title: e.target.value })}
+              />
+            </td>
+            <td>
+              <input
+                className="cb-fixedreg__cell cb-num"
+                value={form.defaultAmount}
+                disabled={busy}
+                onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
+              />
+            </td>
+            <td>
+              <select
+                className="cb-fixedreg__cell"
+                value={form.paymentMethod}
+                disabled={busy}
+                onChange={(e) => patchForm({ paymentMethod: e.target.value })}
+              >
+                {PAYMENT_OPTIONS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            </td>
+            <td>{periodCell}</td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <div className="cb-settings__section cb-fixedreg">
       <SettingsSectionToolbar
@@ -308,225 +621,9 @@ export function FixedRegistrationPanel({ book, categories }: Props) {
         onChange={(id) => setScheduleTab(id as ScheduleTab)}
       />
 
-      <MonetaHint>매월/매일 고정으로 발생하는 내역을 등록하여 관리하세요.</MonetaHint>
-      {err && <p className="cb-err cb-settings__err">{err}</p>}
-
-      <div className="cb-fixedreg__form">
-        <div className="cb-fixedreg__formGrid">
-          <label className="cb-fixedreg__field">
-            <span>일자 및 휴일체크 *</span>
-            <div className="cb-fixedreg__inline">
-              {daySelect}
-              {scheduleTab === "MONTHLY" && (
-                <select
-                  className="cb-fixedreg__cell"
-                  value={form.holidayAdjust}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ holidayAdjust: e.target.value as FixedHolidayAdjust })}
-                >
-                  {HOLIDAY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </label>
-
-          {mainTab === "INCOME" && (
-            <>
-              <label className="cb-fixedreg__field cb-fixedreg__field--wide">
-                <span>분류 +</span>
-                <CategoryPicker
-                  className="cb-fixedreg__cell"
-                  groups={incomeGroups}
-                  value={form.category}
-                  onChange={(v) => patchForm({ category: v })}
-                  disabled={busy}
-                />
-              </label>
-              <label className="cb-fixedreg__field cb-fixedreg__field--wide">
-                <span>수입내역 *</span>
-                <input
-                  className="cb-fixedreg__cell"
-                  value={form.title}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ title: e.target.value })}
-                />
-              </label>
-            </>
-          )}
-
-          {mainTab === "SAVINGS" && (
-            <>
-              <label className="cb-fixedreg__field">
-                <span>저축/보험명 + *</span>
-                <div className="cb-fixedreg__inline">
-                  <select
-                    className="cb-fixedreg__cell"
-                    value={form.subCategory}
-                    disabled={busy}
-                    onChange={(e) => patchForm({ subCategory: e.target.value })}
-                  >
-                    {SAVINGS_CLASSES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                  <ComboInput
-                    className="cb-fixedreg__cell"
-                    options={nameOptions}
-                    value={form.title}
-                    onChange={(v) => patchForm({ title: v })}
-                    disabled={busy}
-                  />
-                </div>
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>비고</span>
-                <input
-                  className="cb-fixedreg__cell"
-                  value={form.remarks}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ remarks: e.target.value })}
-                />
-              </label>
-            </>
-          )}
-
-          {mainTab === "LOAN" && (
-            <>
-              <label className="cb-fixedreg__field cb-fixedreg__field--wide">
-                <span>대출명 + *</span>
-                <ComboInput
-                  className="cb-fixedreg__cell"
-                  options={nameOptions}
-                  value={form.title}
-                  onChange={(v) => patchForm({ title: v })}
-                  disabled={busy}
-                />
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>상환원금</span>
-                <input
-                  className="cb-fixedreg__cell cb-num"
-                  value={form.defaultAmount}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
-                />
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>상환이자</span>
-                <input
-                  className="cb-fixedreg__cell cb-num"
-                  value={form.interestAmount}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ interestAmount: formatAmountInput(e.target.value) })}
-                />
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>비고</span>
-                <input
-                  className="cb-fixedreg__cell"
-                  value={form.remarks}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ remarks: e.target.value })}
-                />
-              </label>
-            </>
-          )}
-
-          {mainTab === "EXPENSE" && (
-            <>
-              <label className="cb-fixedreg__field cb-fixedreg__field--wide">
-                <span>분류</span>
-                <CategoryPicker
-                  className="cb-fixedreg__cell"
-                  groups={expenseGroups}
-                  value={form.category}
-                  onChange={(v) => patchForm({ category: v })}
-                  disabled={busy}
-                />
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>지출내역 *</span>
-                <input
-                  className="cb-fixedreg__cell"
-                  value={form.title}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ title: e.target.value })}
-                />
-              </label>
-              <label className="cb-fixedreg__field">
-                <span>현금/카드</span>
-                <select
-                  className="cb-fixedreg__cell"
-                  value={form.paymentMethod}
-                  disabled={busy}
-                  onChange={(e) => patchForm({ paymentMethod: e.target.value })}
-                >
-                  {PAYMENT_OPTIONS.map((o) => (
-                    <option key={o} value={o}>
-                      {o}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
-
-          {(mainTab === "INCOME" || mainTab === "SAVINGS" || mainTab === "EXPENSE") && (
-            <label className="cb-fixedreg__field">
-              <span>금액</span>
-              <input
-                className="cb-fixedreg__cell cb-num"
-                value={form.defaultAmount}
-                disabled={busy}
-                onChange={(e) => patchForm({ defaultAmount: formatAmountInput(e.target.value) })}
-              />
-            </label>
-          )}
-
-          <label className="cb-fixedreg__field">
-            <span>고정기간</span>
-            <div className="cb-fixedreg__inline">
-              <select
-                className="cb-fixedreg__cell"
-                value={form.periodType}
-                disabled={busy}
-                onChange={(e) => patchForm({ periodType: e.target.value as FixedPeriodType })}
-              >
-                {PERIOD_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              {form.periodType === "RANGE" && (
-                <>
-                  <input
-                    type="date"
-                    className="cb-fixedreg__cell"
-                    value={form.periodStart}
-                    disabled={busy}
-                    onChange={(e) => patchForm({ periodStart: e.target.value })}
-                  />
-                  <input
-                    type="date"
-                    className="cb-fixedreg__cell"
-                    value={form.periodEnd}
-                    disabled={busy}
-                    onChange={(e) => patchForm({ periodEnd: e.target.value })}
-                  />
-                </>
-              )}
-            </div>
-          </label>
-        </div>
-
-        <div className="cb-fixedreg__formActions">
+      <div className="cb-fixedreg__hintBar">
+        <MonetaHint>매월/매일 고정으로 발생하는 내역을 등록하여 관리하세요.</MonetaHint>
+        <div className="cb-fixedreg__hintActions">
           <button type="button" className="cb-btn cb-btn--primary" disabled={busy} onClick={() => void handleRegister()}>
             {editId ? "수정" : "등록"}
           </button>
@@ -534,6 +631,11 @@ export function FixedRegistrationPanel({ book, categories }: Props) {
             취소
           </button>
         </div>
+      </div>
+      {err && <p className="cb-err cb-settings__err">{err}</p>}
+
+      <div className="cb-fixedreg__form">
+        <div className="cb-fixedreg__tableWrap cb-fixedreg__tableWrap--form">{renderFormTable()}</div>
       </div>
 
       <div className="cb-fixedreg__tableWrap">

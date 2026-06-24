@@ -37,12 +37,17 @@ public class CbTransaction {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount = BigDecimal.ZERO;
 
-    @Column(length = 80)
-    private String category = "";
+    /** 지출/수입 소분류 → cb_category.id */
+    @Column(name = "category_id")
+    private Long categoryId;
 
-    /** 지출: 카드명 등 (현금이면 비움) */
-    @Column(length = 80)
-    private String cardName = "";
+    /** 지출: 카드 상품 → cb_financial_product.id (CARD, 현금이면 null) */
+    @Column(name = "card_product_id")
+    private Long cardProductId;
+
+    /** 저축/보험: 금융상품 → cb_financial_product.id */
+    @Column(name = "savings_product_id")
+    private Long savingsProductId;
 
     @Column(length = 500)
     private String remarks = "";
@@ -61,6 +66,18 @@ public class CbTransaction {
 
     /** 연동된 다른 장부 거래 ID */
     private Long linkedTxId;
+
+    /** 개인 지출: 가계 장부에 반영할 분류 → cb_category.id (HOUSEHOLD) */
+    @Column(name = "household_category_id")
+    private Long householdCategoryId;
+
+    public Long getHouseholdCategoryId() {
+        return householdCategoryId;
+    }
+
+    public void setHouseholdCategoryId(Long householdCategoryId) {
+        this.householdCategoryId = householdCategoryId;
+    }
 
     public Long getId() {
         return id;
@@ -106,20 +123,28 @@ public class CbTransaction {
         this.amount = amount;
     }
 
-    public String getCategory() {
-        return category;
+    public Long getCategoryId() {
+        return categoryId;
     }
 
-    public void setCategory(String category) {
-        this.category = category;
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
     }
 
-    public String getCardName() {
-        return cardName;
+    public Long getCardProductId() {
+        return cardProductId;
     }
 
-    public void setCardName(String cardName) {
-        this.cardName = cardName;
+    public void setCardProductId(Long cardProductId) {
+        this.cardProductId = cardProductId;
+    }
+
+    public Long getSavingsProductId() {
+        return savingsProductId;
+    }
+
+    public void setSavingsProductId(Long savingsProductId) {
+        this.savingsProductId = savingsProductId;
     }
 
     public String getRemarks() {

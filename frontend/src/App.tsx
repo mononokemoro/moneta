@@ -14,8 +14,19 @@ import { SettingsView, type SettingsSection } from "./components/SettingsView";
 import { RightSidebar, type SidebarView } from "./components/RightSidebar";
 import { toIsoDate } from "./util/dateUtil";
 import { confirmLeaveUnsaved } from "./util/confirmDialog";
+import { isDataPopupWindow } from "./util/openDataWindow";
 
-export default function App() {
+function DataPopupApp() {
+  return (
+    <div className="cb-shell cb-shell--data-popup">
+      <div className="cb-data-layout cb-data-layout--popup">
+        <DataView />
+      </div>
+    </div>
+  );
+}
+
+function MainApp() {
   const [view, setView] = useState<SidebarView>("cashbook");
   const [book, setBook] = useState<LedgerBook>(() => loadLedgerBook());
   const [date, setDate] = useState(() => toIsoDate(new Date()));
@@ -138,12 +149,6 @@ export default function App() {
           <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
         </div>
       )}
-      {view === "data" && (
-        <div className="cb-data-layout">
-          <DataView />
-          <RightSidebar view={view} onViewChange={tryViewChange} date={date} day={day} />
-        </div>
-      )}
       {view === "settings" && (
         <div className="cb-settings-layout">
           <SettingsView
@@ -157,4 +162,11 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export default function App() {
+  if (isDataPopupWindow()) {
+    return <DataPopupApp />;
+  }
+  return <MainApp />;
 }

@@ -26,3 +26,10 @@ spring:
 logging:
   level:
     com.pininicong: INFO
+
+pininicong:
+  import:
+    # 모네타 보고서 폴더 (category_id 백필용, 선택)
+    dir: ${PININICONG_IMPORT_DIR:}
+    personal-dir: ${PININICONG_IMPORT_PERSONAL_DIR:}
+    household-dir: ${PININICONG_IMPORT_HOUSEHOLD_DIR:}

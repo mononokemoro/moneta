@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SavingsRow } from "../api/cashbook";
 import { createTransaction, updateTransaction } from "../api/cashbook";
 import type { LedgerBook } from "../api/ledgerBook";
+import { upsertProductBalanceAnchor } from "../api/savingsBalance";
 import { formatMoney } from "../formatMoney";
 import { amountToInput, formatAmountInput, parseAmount } from "../util/parseAmount";
 import { buildTableDrafts } from "../util/tableDrafts";
@@ -10,6 +11,7 @@ import { ComboInput } from "./ComboInput";
 type RowDraft = {
   key: string;
   id?: number;
+  savingsProductId: number | null;
   title: string;
   amount: string;
   accumulated: string;
@@ -30,6 +32,7 @@ type Props = {
 function emptyDraft(): RowDraft {
   return {
     key: `new-${Math.random().toString(36).slice(2)}`,
+    savingsProductId: null,
     title: "",
     amount: "",
     accumulated: "",
@@ -41,6 +44,7 @@ function fromRow(r: SavingsRow): RowDraft {
   return {
     key: String(r.id),
     id: r.id,
+    savingsProductId: r.savingsProductId ?? null,
     title: r.title,
     amount: amountToInput(r.amount),
     accumulated: amountToInput(r.accumulatedAmount),
@@ -59,6 +63,10 @@ function rowChanged(d: RowDraft, r: SavingsRow): boolean {
     parseAmount(d.accumulated) !== r.accumulatedAmount ||
     d.remarks !== r.remarks
   );
+}
+
+function anchorChanged(d: RowDraft, r: SavingsRow): boolean {
+  return parseAmount(d.accumulated) !== r.accumulatedAmount;
 }
 
 function hasUnsavedDrafts(drafts: RowDraft[], rows: SavingsRow[]): boolean {
@@ -89,6 +97,17 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
     setDrafts((prev) => prev.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   }
 
+  async function commitAnchorIfNeeded(d: RowDraft, orig?: SavingsRow) {
+    if (!orig || !anchorChanged(d, orig)) return;
+    const balance = parseAmount(d.accumulated);
+    await upsertProductBalanceAnchor(book, {
+      productId: d.savingsProductId ?? orig.savingsProductId ?? undefined,
+      title: d.title.trim() || orig.title,
+      anchorDate: txDate,
+      balance,
+    });
+  }
+
   async function commitRow(d: RowDraft) {
     if (busy) return;
     const orig = d.id ? rows.find((r) => r.id === d.id) : undefined;
@@ -104,9 +123,16 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
           amount: parseAmount(d.amount),
           category: "저축",
           remarks: d.remarks,
-          accumulatedAmount: parseAmount(d.accumulated),
+          savingsProductId: d.savingsProductId,
           book,
         });
+        if (d.accumulated.trim()) {
+          await upsertProductBalanceAnchor(book, {
+            title: d.title.trim() || "(미입력)",
+            anchorDate: txDate,
+            balance: parseAmount(d.accumulated),
+          });
+        }
         await onReload();
       } finally {
         setBusy(false);
@@ -114,16 +140,30 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
       return;
     }
 
-    if (!orig || !rowChanged(d, orig)) return;
+    if (!orig) return;
+
+    const needsTxUpdate =
+      d.title !== orig.title ||
+      parseAmount(d.amount) !== orig.amount ||
+      d.remarks !== orig.remarks;
+    const needsAnchor = anchorChanged(d, orig);
+
+    if (!needsTxUpdate && !needsAnchor) return;
+
     setBusy(true);
     try {
-      await updateTransaction(d.id, {
-        title: d.title.trim() || "(미입력)",
-        amount: parseAmount(d.amount),
-        category: "저축",
-        remarks: d.remarks,
-        accumulatedAmount: parseAmount(d.accumulated),
-      });
+      if (needsTxUpdate) {
+        await updateTransaction(d.id, {
+          title: d.title.trim() || "(미입력)",
+          amount: parseAmount(d.amount),
+          category: "저축",
+          remarks: d.remarks,
+          savingsProductId: d.savingsProductId ?? orig.savingsProductId,
+        });
+      }
+      if (needsAnchor) {
+        await commitAnchorIfNeeded(d, orig);
+      }
       await onReload();
     } finally {
       setBusy(false);
@@ -169,7 +209,9 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                 <th className="cb-col-check" />
                 <th>항목</th>
                 <th className="cb-num">금액</th>
-                <th className="cb-num">누적금액</th>
+                <th className="cb-num" title="계산값 · 편집 시 잔액 확인(기준점) 저장">
+                  누적금액
+                </th>
                 <th>비고</th>
               </tr>
             </thead>
@@ -209,8 +251,9 @@ export function SavingsTable({ book, txDate, rows, selected, onToggle, onReload,
                 </td>
                 <td>
                   <input
-                    className="cb-cell cb-num"
+                    className="cb-cell cb-num cb-cell--computed"
                     value={d.accumulated}
+                    title="불입 합계·개설잔액·잔액 확인 기준으로 계산. 수정하면 해당일 잔액 확인으로 저장됩니다."
                     onChange={(e) => patch(d.key, { accumulated: formatAmountInput(e.target.value) })}
                     disabled={busy}
                   />

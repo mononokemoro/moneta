@@ -24,6 +24,8 @@ export interface FinancialProduct {
   periodEndDay: string;
   principal: string;
   cardLimit: string;
+  openingBalance: number;
+  openingDate: string;
 }
 
 export interface ProductList {
